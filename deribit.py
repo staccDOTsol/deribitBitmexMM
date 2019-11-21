@@ -161,7 +161,8 @@ class MarketMaker( object ):
         self.update_status()
         return sum( self.deltas.values()) / self.equity_btc
 
-    
+    def get_spot_eth( self ):
+        returnself.client.index()[ 'eth' ]
     def get_spot( self ):
         return self.client.index()[ 'btc' ]
 
@@ -260,6 +261,8 @@ class MarketMaker( object ):
             pos_lim_short   = max( 0, pos_lim_short )
             
             min_order_size_btc = MIN_ORDER_SIZE / spot * CONTRACT_SIZE
+            if 'ETH' in fut:
+                min_order_size_btc = MIN_ORDER_SIZE / self.get_spot_eth() * CONTRACT_SIZE
             qtybtc  = max( PCT_QTY_BASE  * bal_btc, min_order_size_btc)
             nbids   = min( math.trunc( pos_lim_long  / qtybtc ), MAX_LAYERS )
             nasks   = min( math.trunc( pos_lim_short / qtybtc ), MAX_LAYERS )
@@ -324,8 +327,7 @@ class MarketMaker( object ):
                         prc = bids[ 0 ]
 
                     qty = round( prc * qtybtc / con_sz )                        
-                    if 'ETH' in fut:
-                        qty = round( prc * 450 * qtybtc / con_sz )            
+                            
                     if i < len_bid_ords:    
 
                         oid = bid_ords[ i ][ 'orderId' ]
@@ -361,9 +363,7 @@ class MarketMaker( object ):
                     else:
                         prc = asks[ 0 ]
                         
-                    qty = round( prc * qtybtc / con_sz )
-                    if 'ETH' in fut:
-                        qty = round( prc * 450 * qtybtc / con_sz )    
+                    qty = round( prc * qtybtc / con_sz )   
                     if i < len_ask_ords:
                         oid = ask_ords[ i ][ 'orderId' ]
                         try:

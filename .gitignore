@@ -11,3 +11,4 @@ configs/
 build
 build/lib/market_maker.pyokex.py
 balance*
+node_modules
