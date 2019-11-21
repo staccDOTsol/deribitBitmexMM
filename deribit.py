@@ -104,8 +104,8 @@ class MarketMaker( object ):
     
     def create_client( self ):
         #self.client = RestClient( KEY, SECRET, URL )
-        self.client = ccxt.bitmex({    "apiKey": KEY,
-    "secret": SECRET})
+        self.client = RestClient( KEY, SECRET, 'https://www.deribit.com' )
+
     
     def get_bbo( self, contract ): # Get best b/o excluding own orders
         
