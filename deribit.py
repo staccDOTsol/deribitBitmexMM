@@ -7,7 +7,7 @@ from time           import sleep
 from utils          import ( get_logger, lag, print_dict, print_dict_of_dicts, sort_by_key,
                              ticksize_ceil, ticksize_floor, ticksize_round )
 import ccxt
-
+import json
 import copy as cp
 import argparse, logging, math, os, pathlib, sys, time, traceback
 
@@ -42,9 +42,10 @@ parser.add_argument( '--no-restart',
                      action = 'store_false' )
 
 args    = parser.parse_args()
+URL     = 'https://test.deribit.com'
 
-KEY     = ''
-SECRET  = ''
+KEY     = '0VGQn6S2'
+SECRET  = 'QV617FixdyvS-THLj2UlU9LfBB1MpjgGEt7hDy_n788'
 
 BP                  = 1e-4      # one basis point
 BTC_SYMBOL          = 'btc'
@@ -55,13 +56,13 @@ EWMA_WGT_COV        = 70         # parameter in % points for EWMA volatility est
 EWMA_WGT_LOOPTIME   = .6      # parameter for EWMA looptime estimate
 FORECAST_RETURN_CAP = 20        # cap on returns for vol estimate
 LOG_LEVEL           = logging.INFO
-MIN_ORDER_SIZE      =  1
-MAX_LAYERS          =   4       # max orders to layer the ob with on each side
+MIN_ORDER_SIZE      = 1
+MAX_LAYERS          =  4        # max orders to layer the ob with on each side
 MKT_IMPACT          =  0      # base 1-sided spread between bid/offer
 NLAGS               =  2        # number of lags in time series
 PCT                 = 100 * BP  # one percentage point
-PCT_LIM_LONG        = 1000       # % position limit long
-PCT_LIM_SHORT       = 1200       # % position limit short
+PCT_LIM_LONG        = 800       # % position limit long
+PCT_LIM_SHORT       = 1600       # % position limit short
 PCT_QTY_BASE        = 1000       # pct order qty in bps as pct of acct on each order
 MIN_LOOP_TIME       =   0.1       # Minimum time between loops
 RISK_CHARGE_VOL     =   7.5   # vol risk charge in bps per 100 vol
@@ -84,6 +85,7 @@ class MarketMaker( object ):
     def __init__( self, monitor = True, output = True ):
         self.equity_usd         = None
         self.equity_btc         = None
+        self.eth = 0
         self.equity_usd_init    = None
         self.equity_btc_init    = None
         self.con_size           = float( CONTRACT_SIZE )
@@ -103,9 +105,8 @@ class MarketMaker( object ):
     
     
     def create_client( self ):
-        #self.client = RestClient( KEY, SECRET, URL )
-        self.client = RestClient( KEY, SECRET, 'https://www.deribit.com' )
-
+        self.client = RestClient( KEY, SECRET, URL )
+        
     
     def get_bbo( self, contract ): # Get best b/o excluding own orders
         
@@ -160,9 +161,7 @@ class MarketMaker( object ):
     def get_pct_delta( self ):         
         self.update_status()
         return sum( self.deltas.values()) / self.equity_btc
-
-    def get_spot_eth( self ):
-        returnself.client.index()[ 'eth' ]
+    
     def get_spot( self ):
         return self.client.index()[ 'btc' ]
 
@@ -239,18 +238,20 @@ class MarketMaker( object ):
             account         = self.client.account()
             spot            = self.get_spot()
             bal_btc         = account[ 'equity' ]
-            if ( 'sizeBtc'  in self.positions[ fut ]):
-                pos             = self.positions[ fut ][ 'sizeBtc' ]
-                PCT_LIM_SHORT = 400
-                PCT_LIM_LONG = 200
-            else:
-                pos             = self.positions[ fut ][ 'sizeEth' ]
-                PCT_LIM_SHORT = 400 
-                PCT_LIM_LONG = 200 
             pos_lim_long    = bal_btc * PCT_LIM_LONG / len(self.futures)
             pos_lim_short   = bal_btc * PCT_LIM_SHORT / len(self.futures)
             expi            = self.futures[ fut ][ 'expi_dt' ]
-            print(self.futures[ fut ][ 'expi_dt' ])
+            #print(self.futures[ fut ][ 'expi_dt' ])
+            if self.eth is 0:
+                self.eth = 200
+            if 'ETH' in fut:
+                if 'sizeEth' in self.positions[fut]:
+                    pos             = self.positions[ fut ][ 'sizeEth' ] * self.eth / self.get_spot() 
+                else:
+                    pos = 0
+            else:
+                pos             = self.positions[ fut ][ 'sizeBtc' ]
+
             tte             = max( 0, ( expi - datetime.utcnow()).total_seconds() / SECONDS_IN_DAY )
             pos_decay       = 1.0 - math.exp( -DECAY_POS_LIM * tte )
             pos_lim_long   *= pos_decay
@@ -261,8 +262,7 @@ class MarketMaker( object ):
             pos_lim_short   = max( 0, pos_lim_short )
             
             min_order_size_btc = MIN_ORDER_SIZE / spot * CONTRACT_SIZE
-            if 'ETH' in fut:
-                min_order_size_btc = MIN_ORDER_SIZE / self.get_spot_eth() * CONTRACT_SIZE
+            
             qtybtc  = max( PCT_QTY_BASE  * bal_btc, min_order_size_btc)
             nbids   = min( math.trunc( pos_lim_long  / qtybtc ), MAX_LAYERS )
             nasks   = min( math.trunc( pos_lim_short / qtybtc ), MAX_LAYERS )
@@ -284,7 +284,9 @@ class MarketMaker( object ):
             bbo     = self.get_bbo( fut )
             bid_mkt = bbo[ 'bid' ]
             ask_mkt = bbo[ 'ask' ]
-            
+            mid = 0.5 * ( bbo[ 'bid' ] + bbo[ 'ask' ] )
+            if 'ETH-PERPETUAL' in fut:
+                self.eth = mid
             if bid_mkt is None and ask_mkt is None:
                 bid_mkt = ask_mkt = spot
             elif bid_mkt is None:
@@ -327,7 +329,8 @@ class MarketMaker( object ):
                         prc = bids[ 0 ]
 
                     qty = round( prc * qtybtc / con_sz )                        
-                            
+                    if 'ETH' in fut:
+                        qty = round( prc * 450 * qtybtc / con_sz )            
                     if i < len_bid_ords:    
 
                         oid = bid_ords[ i ][ 'orderId' ]
@@ -363,7 +366,9 @@ class MarketMaker( object ):
                     else:
                         prc = asks[ 0 ]
                         
-                    qty = round( prc * qtybtc / con_sz )   
+                    qty = round( prc * qtybtc / con_sz )
+                    if 'ETH' in fut:
+                        qty = round( prc * 450 * qtybtc / con_sz )    
                     if i < len_ask_ords:
                         oid = ask_ords[ i ][ 'orderId' ]
                         try:
@@ -531,6 +536,8 @@ class MarketMaker( object ):
         positions       = self.client.positions()
         
         for pos in positions:
+            if 'ETH' in pos['instrument']:
+                pos['size'] = pos['size'] / 10
             if pos[ 'instrument' ] in self.futures:
                 self.positions[ pos[ 'instrument' ]] = pos
         
@@ -554,6 +561,7 @@ class MarketMaker( object ):
 
             if not bid is None and not ask is None:
                 mid = 0.5 * ( bbo[ 'bid' ] + bbo[ 'ask' ] )
+                
             else:
                 continue
             self.ts[ 0 ][ c ]               = mid
@@ -593,7 +601,10 @@ class MarketMaker( object ):
             
             self.vols[ s ] = math.sqrt( v )
                             
-        
+        with open('deribit.json', 'w') as f:
+            dictionaries = self.vols
+            f.write(json.dumps(dictionaries))
+
 if __name__ == '__main__':
     
     try:
