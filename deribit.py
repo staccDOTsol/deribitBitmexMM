@@ -604,6 +604,15 @@ class MarketMaker( object ):
         with open('deribit.json', 'w') as f:
             dictionaries = self.vols
             f.write(json.dumps(dictionaries))
+        with open('bitmex.json', 'r') as read_file:
+            loaded_dictionaries = json.loads(read_file.read())
+            loaded_dictionaries['BTC-PERPETUAL'] = loaded_dictionaries['XBTUSD']
+            loaded_dictionaries['ETH-PERPETUAL'] = loaded_dictionaries['ETHUSD']
+            loaded_dictionaries['BTC-27DEC19'] = loaded_dictionaries['XBTZ19']
+            loaded_dictionaries['BTC-27MAR20'] = loaded_dictionaries['XBTH20']
+            for s in self.vols.keys():
+                if s in loaded_dictionaries:
+                    self.vols[s] = self.vols[s] / 2 + loaded_dictionaries[s] / 2
 
 if __name__ == '__main__':
     

@@ -540,7 +540,7 @@ class MarketMaker( object ):
             sleep(4)
             if k == 'BTC/USD':
                 k = 'XBTUSD'
-            self.ws[k] = (BitMEXWebsocket(endpoint="https://www.bitmex.com/api/v1", symbol=k, api_key=KEY, api_secret=SECRET))
+            self.ws[k] = (BitMEXWebsocket(endpoint="https://testnet.bitmex.com/api/v1", symbol=k, api_key=KEY, api_secret=SECRET))
             #sleep(30)
         self.get_spot()
         self.this_mtime = getmtime( __file__ )
@@ -658,6 +658,15 @@ class MarketMaker( object ):
         with open('bitmex.json', 'w') as f:
             dictionaries = self.vols
             f.write(json.dumps(dictionaries))
+        with open('deribit.json', 'r') as read_file:
+            loaded_dictionaries = json.loads(read_file.read())
+            loaded_dictionaries['XBTUSD'] = loaded_dictionaries['BTC-PERPETUAL']
+            loaded_dictionaries['ETHUSD'] = loaded_dictionaries['ETH-PERPETUAL']
+            loaded_dictionaries['XBTZ19'] = loaded_dictionaries['BTC-27DEC19']
+            loaded_dictionaries['XBTH20'] = loaded_dictionaries['BTC-27MAR20']
+            for s in self.vols.keys():
+                if s in loaded_dictionaries:
+                    self.vols[s] = self.vols[s] / 2 + loaded_dictionaries[s] / 2
 if __name__ == '__main__':
     
     try:
