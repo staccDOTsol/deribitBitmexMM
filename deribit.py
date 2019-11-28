@@ -8,6 +8,7 @@ from utils          import ( get_logger, lag, print_dict, print_dict_of_dicts, s
                              ticksize_ceil, ticksize_floor, ticksize_round )
 import ccxt
 import json
+
 import copy as cp
 import argparse, logging, math, os, pathlib, sys, time, traceback
 
@@ -57,9 +58,9 @@ EWMA_WGT_LOOPTIME   = .6      # parameter for EWMA looptime estimate
 FORECAST_RETURN_CAP = 20        # cap on returns for vol estimate
 LOG_LEVEL           = logging.INFO
 MIN_ORDER_SIZE      = 1
-MAX_LAYERS          =  4        # max orders to layer the ob with on each side
+MAX_LAYERS          =  3        # max orders to layer the ob with on each side
 MKT_IMPACT          =  0      # base 1-sided spread between bid/offer
-NLAGS               =  2        # number of lags in time series
+NLAGS               =  4        # number of lags in time series
 PCT                 = 100 * BP  # one percentage point
 PCT_LIM_LONG        = 800       # % position limit long
 PCT_LIM_SHORT       = 1600       # % position limit short
@@ -149,7 +150,7 @@ class MarketMaker( object ):
         self.futures_prv    = cp.deepcopy( self.futures )
         insts               = self.client.getinstruments()
         self.futures        = sort_by_key( { 
-            i[ 'instrumentName' ]: i for i in insts  if i[ 'kind' ] == 'future'
+            i[ 'instrumentName' ]: i for i in insts  if i['instrumentName'] == 'BTC-PERPETUAL'#if i[ 'kind' ] == 'future'
         } )
         
         for k, v in self.futures.items():
@@ -569,15 +570,43 @@ class MarketMaker( object ):
         self.ts[ 0 ][ 'timestamp' ]  = datetime.utcnow()
 
         
+        with open('deribit.json', 'w') as f:
+            dictionaries = self.ts
+            f.write(json.dumps(dictionaries, default=str))
     def update_vols( self ):
         
         if self.monitor:
             return None
         
         w   = EWMA_WGT_COV
-        ts  = self.ts
+        with open('deribit.json', 'r') as read_file:
+            loaded_dictionaries = json.loads(read_file.read())
+        with open('bitmex.json', 'r') as read_file:
+            loaded_dictionaries2 = json.loads(read_file.read().replace('XBTUSD', 'BTC-PERPETUAL'))
+
+        for r in loaded_dictionaries2:
+            loaded_dictionaries.append(r) 
+        ts  = loaded_dictionaries
+        ttemp = []
+        tnulls = []
+        for t in ts:
+            if t['timestamp'] is not None:
+                ttemp.append(t)
+            else:
+                tnulls.append(t)
         
-        t   = [ ts[ i ][ 'timestamp' ] for i in range( NLAGS + 1 ) ]
+        #print(ttemp)
+        ttemp.sort(key=lambda x:datetime.strptime(x[ 'timestamp' ] , '%Y-%m-%d %H:%M:%S.%f'))
+        ts = []
+        for t in ttemp:
+            ts.append(t)
+        for t in tnulls:
+            ts.append(t)
+        t = []
+        for i in range (NLAGS + 1):
+            if ts[ i ][ 'timestamp' ] is not None:
+                t.append(datetime.strptime(ts[ i ][ 'timestamp' ] , '%Y-%m-%d %H:%M:%S.%f'))
+                #t   = [datetime.strptime(ts[ i ][ 'timestamp' ] for i in range( NLAGS + 1 ) ] , '%Y-%m-%d %H:%M:%S.%f')  #2019-11-28 04:34:41.820747
         p   = { c: None for c in self.vols.keys() }
         for c in ts[ 0 ].keys():
             p[ c ] = [ ts[ i ][ c ] for i in range( NLAGS + 1 ) ]
@@ -601,18 +630,7 @@ class MarketMaker( object ):
             
             self.vols[ s ] = math.sqrt( v )
                             
-        with open('deribit.json', 'w') as f:
-            dictionaries = self.vols
-            f.write(json.dumps(dictionaries))
-        with open('bitmex.json', 'r') as read_file:
-            loaded_dictionaries = json.loads(read_file.read())
-            loaded_dictionaries['BTC-PERPETUAL'] = loaded_dictionaries['XBTUSD']
-            loaded_dictionaries['ETH-PERPETUAL'] = loaded_dictionaries['ETHUSD']
-            loaded_dictionaries['BTC-27DEC19'] = loaded_dictionaries['XBTZ19']
-            loaded_dictionaries['BTC-27MAR20'] = loaded_dictionaries['XBTH20']
-            for s in self.vols.keys():
-                if s in loaded_dictionaries:
-                    self.vols[s] = self.vols[s] / 2 + loaded_dictionaries[s] / 2
+        
 
 if __name__ == '__main__':
     

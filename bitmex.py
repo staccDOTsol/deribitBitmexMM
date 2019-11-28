@@ -7,6 +7,7 @@ from time           import sleep
 from utils          import ( get_logger, lag, print_dict, print_dict_of_dicts, sort_by_key,
                              ticksize_ceil, ticksize_floor, ticksize_round )
 import json
+
 from bitmex_websocket import BitMEXWebsocket
 import copy as cp
 import argparse, logging, math, os, pathlib, sys, time, traceback
@@ -58,7 +59,7 @@ LOG_LEVEL           = logging.INFO
 MIN_ORDER_SIZE      = 25
 MAX_LAYERS          =  3        # max orders to layer the ob with on each side
 MKT_IMPACT          =  0      # base 1-sided spread between bid/offer
-NLAGS               =  2        # number of lags in time series
+NLAGS               =  4        # number of lags in time series
 PCT                 = 100 * BP  # one percentage point
 PCT_LIM_LONG        = 1000      # % position limit long
 PCT_LIM_SHORT       = 2000       # % position limit short
@@ -159,12 +160,12 @@ class MarketMaker( object ):
         insts               = self.client.fetchMarkets()
         #print(insts[0])
         self.futures        = sort_by_key( { 
-            i[ 'symbol' ]: i for i in insts if 'BTC/USD' in i['symbol'] or ('ETH/USD' in i['symbol']  and '7D' not in i['symbol'] and '.' not in i['symbol']) or ('XBT' in i['symbol'] and '7D' not in i['symbol']) and '.' not in i['symbol']
+            i[ 'symbol' ]: i for i in insts if 'BTC/USD' in i['symbol'] # or ('ETH/USD' in i['symbol']  and '7D' not in i['symbol'] and '.' not in i['symbol']) or ('XBT' in i['symbol'] and '7D' not in i['symbol']) and '.' not in i['symbol']
         } )
         self.futures['XBTUSD'] = self.futures['BTC/USD']
         del self.futures['BTC/USD']
-        self.futures['ETHUSD'] = self.futures['ETH/USD']
-        del self.futures['ETH/USD']
+        #self.futures['ETHUSD'] = self.futures['ETH/USD']
+        #del self.futures['ETH/USD']
         #print(self.futures['XBTH20'])
         for k in self.futures.keys():
             if self.futures[k]['info']['expiry'] == None:
@@ -622,16 +623,42 @@ class MarketMaker( object ):
                 
         self.ts[ 0 ][ 'timestamp' ]  = datetime.utcnow()
 
-        
+        with open('bitmex.json', 'w') as f:
+            dictionaries = self.ts
+            f.write(json.dumps(dictionaries, default=str))
     def update_vols( self ):
         
         if self.monitor:
             return None
         
         w   = EWMA_WGT_COV
-        ts  = self.ts
+        with open('bitmex.json', 'r') as read_file:
+            loaded_dictionaries = json.loads(read_file.read())
+        with open('deribit.json', 'r') as read_file:
+            loaded_dictionaries2 = json.loads(read_file.read().replace( 'BTC-PERPETUAL', 'XBTUSD'))
+
+        for r in loaded_dictionaries2:
+            loaded_dictionaries.append(r) 
+        ts  = loaded_dictionaries
+        ttemp = []
+        tnulls = []
+        for t in ts:
+            if t['timestamp'] is not None:
+                ttemp.append(t)
+            else:
+                tnulls.append(t)
         
-        t   = [ ts[ i ][ 'timestamp' ] for i in range( NLAGS + 1 ) ]
+        #print(ttemp)
+        ttemp.sort(key=lambda x:datetime.strptime(x[ 'timestamp' ] , '%Y-%m-%d %H:%M:%S.%f'))
+        ts = []
+        for t in ttemp:
+            ts.append(t)
+        for t in tnulls:
+            ts.append(t)
+        t = []
+        for i in range (NLAGS + 1):
+            if ts[ i ][ 'timestamp' ] is not None:
+                t.append(datetime.strptime(ts[ i ][ 'timestamp' ] , '%Y-%m-%d %H:%M:%S.%f'))
         p   = { c: None for c in self.vols.keys() }
         for c in ts[ 0 ].keys():
             p[ c ] = [ ts[ i ][ c ] for i in range( NLAGS + 1 ) ]
@@ -655,18 +682,6 @@ class MarketMaker( object ):
             
             self.vols[ s ] = math.sqrt( v )
                             
-        with open('bitmex.json', 'w') as f:
-            dictionaries = self.vols
-            f.write(json.dumps(dictionaries))
-        with open('deribit.json', 'r') as read_file:
-            loaded_dictionaries = json.loads(read_file.read())
-            loaded_dictionaries['XBTUSD'] = loaded_dictionaries['BTC-PERPETUAL']
-            loaded_dictionaries['ETHUSD'] = loaded_dictionaries['ETH-PERPETUAL']
-            loaded_dictionaries['XBTZ19'] = loaded_dictionaries['BTC-27DEC19']
-            loaded_dictionaries['XBTH20'] = loaded_dictionaries['BTC-27MAR20']
-            for s in self.vols.keys():
-                if s in loaded_dictionaries:
-                    self.vols[s] = self.vols[s] / 2 + loaded_dictionaries[s] / 2
 if __name__ == '__main__':
     
     try:
