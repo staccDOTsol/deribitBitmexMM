@@ -69,7 +69,7 @@ PCT_LIM_LONG        = 800       # % position limit long
 PCT_LIM_SHORT       = 1600       # % position limit short
 PCT_QTY_BASE        = 1000       # pct order qty in bps as pct of acct on each order
 MIN_LOOP_TIME       =   0.1       # Minimum time between loops
-RISK_CHARGE_VOL     =   7.5   # vol risk charge in bps per 100 vol
+RISK_CHARGE_VOL     =   4   # vol risk charge in bps per 100 vol
 SECONDS_IN_DAY      = 3600 * 24
 SECONDS_IN_YEAR     = 365 * SECONDS_IN_DAY
 WAVELEN_MTIME_CHK   = 15        # time in seconds between check for file change
@@ -649,15 +649,15 @@ class MarketMaker( object ):
         cov_cap = COV_RETURN_CAP / NSECS
         
         for s in self.vols.keys():
-            
-            x   = [(dvwap.iloc[-1] + vwap.iloc[-1]) / 2, (dvwap.iloc[-2] + vwap.iloc[-2]) / 2, (dvwap.iloc[-3] + vwap.iloc[-3]) / 2]           
-            dx  = x[ 0 ] / x[ 1 ] - 1
-            dt  = ( t[ 0 ] - t[ 1 ] ).total_seconds()
-            v   = min( dx ** 2 / dt, cov_cap ) * NSECS
-            v   = w * v + ( 1 - w ) * self.vols[ s ] ** 2
-            self.vols[ s ] = math.sqrt( v )
-            self.vols[ s ] = dvwap.iloc[-1]/ vwap.iloc[-1]
-           
+            try:
+                x   = [(dvwap.iloc[-1] + vwap.iloc[-1]) / 2, (dvwap.iloc[-2] + vwap.iloc[-2]) / 2, (dvwap.iloc[-3] + vwap.iloc[-3]) / 2]           
+                dx  = x[ 0 ] / x[ 1 ] - 1
+                dt  = ( t[ 0 ] - t[ 1 ] ).total_seconds()
+                v   = min( dx ** 2 / dt, cov_cap ) * NSECS
+                v   = w * v + ( 1 - w ) * self.vols[ s ] ** 2
+                self.vols[ s ] = math.sqrt( v )
+            except Excetion as e:
+                print(e)
 if __name__ == '__main__':
     
     try:
