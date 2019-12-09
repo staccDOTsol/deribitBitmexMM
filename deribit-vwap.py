@@ -588,16 +588,18 @@ class MarketMaker( object ):
                 if i == 'deribit':
                     coin = 'BTC-PERPETUAL'
                 print(i)
-                ohlcv = clients[i].fetchOHLCV(coin, '1m')
-                
-                for o in ohlcv:
-                    if i not in ohlcv2:
-                        ohlcv2[i] = []
-                    ohlcv2[i].append([o[1], o[2], o[3], o[4], o[5]])
-                if i == 'deribit':
-                    ddf = pd.DataFrame(ohlcv2[i], columns=['open', 'high', 'low', 'close', 'volume'])
-                    dvwap = TA.VWAP(ddf)
-
+                try:
+                    ohlcv = clients[i].fetchOHLCV(coin, '1m')
+                    
+                    for o in ohlcv:
+                        if i not in ohlcv2:
+                            ohlcv2[i] = []
+                        ohlcv2[i].append([o[1], o[2], o[3], o[4], o[5]])
+                    if i == 'deribit':
+                        ddf = pd.DataFrame(ohlcv2[i], columns=['open', 'high', 'low', 'close', 'volume'])
+                        dvwap = TA.VWAP(ddf)
+                except Exception as e:
+                    print(e)
             o = {}
             h = {}
             l = {}
