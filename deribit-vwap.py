@@ -221,7 +221,7 @@ class MarketMaker( object ):
         if not self.monitor:
             print_dict_of_dicts( {
                 k: {
-                    '$': self.vols[ k ]
+                    '%': self.vols[ k ]
                 } for k in self.vols.keys()
                 }, 
                 multiple = 100, title = 'VWAPs' )
@@ -631,7 +631,7 @@ class MarketMaker( object ):
         print('deribit vwap')
         print(dvwap.iloc[-1])
 
-            #self.vols[ s ] = math.sqrt( v )
+        self.vols[ s ] = vwap,iloc[-1] / dvwap.iloc[-1]
            
 if __name__ == '__main__':
     
