@@ -574,64 +574,89 @@ class MarketMaker( object ):
 
         
     def update_vols( self ):
-        vwap = {}
-        ohlcv2 = {}
-        for i in clients:
-            coin = 'BTC/USDT'
-            if i == 'kraken':
-                coin = 'BTC/USD'
-            if i == 'hitbtc2':
-                coin = 'BTC/USDT20'
-            if i == 'coinbasepro':
-                coin = 'BTC/USD'
-            if i == 'deribit':
-                coin = 'BTC-PERPETUAL'
-            print(i)
-            ohlcv = clients[i].fetchOHLCV(coin, '30m')
-            
-            for o in ohlcv:
-                if i not in ohlcv2:
-                    ohlcv2[i] = []
-                ohlcv2[i].append([o[1], o[2], o[3], o[4], o[5]])
-            if i == 'deribit':
-                ddf = pd.DataFrame(ohlcv2[i], columns=['open', 'high', 'low', 'close', 'volume'])
-                dvwap = TA.VWAP(ddf)
+        for s in self.futures:
+            vwap = {}
+            ohlcv2 = {}
+            for i in clients:
+                coin = 'BTC/USDT'
+                if i == 'kraken':
+                    coin = 'BTC/USD'
+                if i == 'hitbtc2':
+                    coin = 'BTC/USDT20'
+                if i == 'coinbasepro':
+                    coin = 'BTC/USD'
+                if i == 'deribit':
+                    coin = 'BTC-PERPETUAL'
+                print(i)
+                ohlcv = clients[i].fetchOHLCV(coin, '1m')
+                
+                for o in ohlcv:
+                    if i not in ohlcv2:
+                        ohlcv2[i] = []
+                    ohlcv2[i].append([o[1], o[2], o[3], o[4], o[5]])
+                if i == 'deribit':
+                    ddf = pd.DataFrame(ohlcv2[i], columns=['open', 'high', 'low', 'close', 'volume'])
+                    dvwap = TA.VWAP(ddf)
 
-        o = {}
-        h = {}
-        l = {}
-        c = {}
-        v = {}
-        a = 0
-        for ohlcv in ohlcv2:
-            if a not in o:
-                o[a] = 0
-            o[a] = o[a] + float(ohlcv2[ohlcv][a][0])
-            if a not in h:
-                h[a] = 0
-            h[a] = h[a] + float(ohlcv2[ohlcv][a][1])
-            if a not in l:
-                l[a] = 0
-            l[a] = l[a] + float(ohlcv2[ohlcv][a][2])
-            if a not in c:
-                c[a] = 0
-            c[a] = c[a] + float(ohlcv2[ohlcv][a][3])
-            if a not in v:
-                v[a] = 0
-            v[a] = v[a] + float(ohlcv2[ohlcv][a][4])
+            o = {}
+            h = {}
+            l = {}
+            c = {}
+            v = {}
+            a = 0
+            for ohlcv in ohlcv2:
+                if a not in o:
+                    o[a] = 0
+                o[a] = o[a] + float(ohlcv2[ohlcv][a][0])
+                if a not in h:
+                    h[a] = 0
+                h[a] = h[a] + float(ohlcv2[ohlcv][a][1])
+                if a not in l:
+                    l[a] = 0
+                l[a] = l[a] + float(ohlcv2[ohlcv][a][2])
+                if a not in c:
+                    c[a] = 0
+                c[a] = c[a] + float(ohlcv2[ohlcv][a][3])
+                if a not in v:
+                    v[a] = 0
+                v[a] = v[a] + float(ohlcv2[ohlcv][a][4])
+                
+                a = a + 1
+            final = []
+            for b in o:
+                final.append([o[b], h[b], l[b], c[b], v[b]])
+            df = pd.DataFrame(final, columns=['open', 'high', 'low', 'close', 'volume'])
+            vwap = TA.VWAP(df)
+            print((dvwap.iloc[-1] + vwap.iloc[-1]) / 2)
+        if self.monitor:
+            return None
+        
+        w   = EWMA_WGT_COV
+        ts  = self.ts
+        
+        t   = [ ts[ i ][ 'timestamp' ] for i in range( NLAGS + 1 ) ]
+        p   = { c: None for c in self.vols.keys() }
+        for c in ts[ 0 ].keys():
+            p[ c ] = [ ts[ i ][ c ] for i in range( NLAGS + 1 ) ]
             
-            a = a + 1
-        final = []
-        for b in o:
-            final.append([o[b], h[b], l[b], c[b], v[b]])
-        df = pd.DataFrame(final, columns=['open', 'high', 'low', 'close', 'volume'])
-        vwap = TA.VWAP(df)
-        print('master vwap')
-        print(vwap.iloc[-1])
-        print('deribit vwap')
-        print(dvwap.iloc[-1])
-
-        self.vols[ s ] = vwap,iloc[-1] / dvwap.iloc[-1]
+        if any( x is None for x in t ):
+            return None
+        for c in self.vols.keys():
+            if any( x is None for x in p[ c ] ):
+                return None
+        
+        NSECS   = SECONDS_IN_YEAR
+        cov_cap = COV_RETURN_CAP / NSECS
+        
+        for s in self.vols.keys():
+            
+            x   = [(dvwap.iloc[-1] + vwap.iloc[-1]) / 2, (dvwap.iloc[-2] + vwap.iloc[-2]) / 2, (dvwap.iloc[-3] + vwap.iloc[-3]) / 2]           
+            dx  = x[ 0 ] / x[ 1 ] - 1
+            dt  = ( t[ 0 ] - t[ 1 ] ).total_seconds()
+            v   = min( dx ** 2 / dt, cov_cap ) * NSECS
+            v   = w * v + ( 1 - w ) * self.vols[ s ] ** 2
+            self.vols[ s ] = math.sqrt( v )
+            self.vols[ s ] = dvwap.iloc[-1]/ vwap.iloc[-1]
            
 if __name__ == '__main__':
     

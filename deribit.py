@@ -581,7 +581,7 @@ class MarketMaker( object ):
         p   = { c: None for c in self.vols.keys() }
         for c in ts[ 0 ].keys():
             p[ c ] = [ ts[ i ][ c ] for i in range( NLAGS + 1 ) ]
-        
+            
         if any( x is None for x in t ):
             return None
         for c in self.vols.keys():
@@ -594,11 +594,12 @@ class MarketMaker( object ):
         for s in self.vols.keys():
             
             x   = p[ s ]            
+            print(x)
             dx  = x[ 0 ] / x[ 1 ] - 1
+            print(dx)
             dt  = ( t[ 0 ] - t[ 1 ] ).total_seconds()
             v   = min( dx ** 2 / dt, cov_cap ) * NSECS
             v   = w * v + ( 1 - w ) * self.vols[ s ] ** 2
-            
             self.vols[ s ] = math.sqrt( v )
                             
         with open('deribit.json', 'w') as f:
