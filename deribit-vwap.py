@@ -673,6 +673,8 @@ class MarketMaker( object ):
             dt  = ( t[ 0 ] - t[ 1 ] ).total_seconds()
             v   = min( dx ** 2 / dt, cov_cap ) * NSECS
             v   = w * v + ( 1 - w ) * self.vols[ s ] ** 2
+            if s == 'btc':
+                v = math.sqrt( v )
             self.vols[ s ] = math.sqrt( v )
        
 if __name__ == '__main__':
