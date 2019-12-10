@@ -8,15 +8,7 @@ from utils          import ( get_logger, lag, print_dict, print_dict_of_dicts, s
                              ticksize_ceil, ticksize_floor, ticksize_round )
 import ccxt
 import time
-import threading
 
-def set_interval(func, sec):
-    def func_wrapper():
-        set_interval(func, sec)
-        func()
-    t = threading.Timer(sec, func_wrapper)
-    t.start()
-    return t
 
 
 import requests
@@ -76,7 +68,7 @@ LOG_LEVEL           = logging.INFO
 MIN_ORDER_SIZE      = 1
 MAX_LAYERS          =  3        # max orders to layer the ob with on each side
 MKT_IMPACT          =  0      # base 1-sided spread between bid/offer
-NLAGS               =  4        # number of lags in time series
+NLAGS               =  2     # number of lags in time series
 PCT                 = 100 * BP  # one percentage point
 PCT_LIM_LONG        = 800       # % position limit long
 PCT_LIM_SHORT       = 1600       # % position limit short
@@ -446,8 +438,7 @@ class MarketMaker( object ):
         self.output_status()
 
         t_ts = t_out = t_loop = t_mtime = datetime.utcnow()
-        set_interval(self.update_timeseries, 60)
-        set_interval(self.update_vols, 60)
+        
         while True:
 
             self.get_futures()
@@ -463,7 +454,8 @@ class MarketMaker( object ):
             # Update time series and vols
             if ( t_now - t_ts ).total_seconds() >= WAVELEN_TS:
                 t_ts = t_now
-
+                self.update_timeseries()
+                self.update_vols()
     
             self.place_orders()
             
@@ -583,9 +575,9 @@ class MarketMaker( object ):
             if i == 'deribit':
                 coin = 'BTC-PERPETUAL'
 
-            ohlcv = clients[i].fetchOHLCV(coin, '1m', None, 240)
+            ohlcv = clients[i].fetchOHLCV(coin, '1m', None, 60)
             if i == 'deribit':
-                ohlcv = requests.get('https://www.deribit.com/api/v2/public/get_tradingview_chart_data?instrument_name=BTC-PERPETUAL&start_timestamp=' + str(int(time.time()) * 1000 - 1000 * 60 * 240) + '&end_timestamp=' + str(int(time.time())* 1000) + '&resolution=1')
+                ohlcv = requests.get('https://www.deribit.com/api/v2/public/get_tradingview_chart_data?instrument_name=BTC-PERPETUAL&start_timestamp=' + str(int(time.time()) * 1000 - 1000 * 60 * 60) + '&end_timestamp=' + str(int(time.time())* 1000) + '&resolution=1')
                 j = ohlcv.json()
                 o = []
                 h = []
