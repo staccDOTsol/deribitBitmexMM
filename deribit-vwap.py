@@ -320,9 +320,9 @@ class MarketMaker( object ):
             nbids   = min( math.trunc( pos_lim_long  / qtybtc ), MAX_LAYERS )
             nasks   = min( math.trunc( pos_lim_short / qtybtc ), MAX_LAYERS )
             if(pos_lim_long > pos_lim_short):
-                self.pos_max = pos_lim_long
+                self.max_pos = pos_lim_long
             else:
-                self.pos_max = pos_lim_short
+                self.max_pos = pos_lim_short
             place_bids = nbids > 0
             place_asks = nasks > 0
             
@@ -629,7 +629,7 @@ class MarketMaker( object ):
                 self.positions[ pos[ 'instrument' ]] = pos
         
     def long_straddles(self):
-        therisk = (self.equity_usd * 100 / self.max_pos) 
+        therisk = (self.equity_usd / self.max_pos) 
         
         if therisk < 0:
             therisk = therisk * -1
@@ -808,12 +808,12 @@ class MarketMaker( object ):
                 print(profits[w1])
                 self.options[profits[w1]['call'] + profits[w1]['put']] = smallest / profits[w1]['price']
                 qty = smallest / 2
-                qty = qty / 10
-                qty = math.ceil(qty)
                 qty = qty * 10
+                qty = math.ceil(qty)
+                qty = qty / 10
 
-                self.client.buy(profits[w1]['put'], qty, profits[w1]['costp'] )
-                self.client.buy(profits[w1]['call'], qty, profits[w1]['costc'] )
+                print(self.client.buy(profits[w1]['put'], qty, profits[w1]['costp'] ))
+                print(self.client.buy(profits[w1]['call'], qty, profits[w1]['costc'] ))
                 self.calls.append(profits[w1]['call'])
                 self.puts.append(profits[w1]['put'])
             except Exception as e:
