@@ -20,7 +20,7 @@ import argparse, logging, math, os, pathlib, sys, time, traceback
 
 from deribit_api    import RestClient
 import ccxt
-exchanges = ['deribit', 'hitbtc2', 'binance', 'bitfinex', 'kraken', 'okex', 'bittrex',  'kucoin']
+exchanges = ['deribit', 'hitbtc2', 'binance', 'bitfinex', 'kraken', 'bittrex',  'kucoin']
 print (len(exchanges))
 clients = {}
 for i in exchanges:
@@ -574,9 +574,9 @@ class MarketMaker( object ):
             if i == 'deribit':
                 coin = 'BTC-PERPETUAL'
 
-            ohlcv = clients[i].fetchOHLCV(coin, '1m')
+            ohlcv = clients[i].fetchOHLCV(coin, '1m', None, 60)
             if i == 'deribit':
-                ohlcv = requests.get('https://www.deribit.com/api/v2/public/get_tradingview_chart_data?instrument_name=BTC-PERPETUAL&start_timestamp=' + str(int(time.time()) * 1000 - 1000 * 60 * 200) + '&end_timestamp=' + str(int(time.time())* 1000) + '&resolution=1')
+                ohlcv = requests.get('https://www.deribit.com/api/v2/public/get_tradingview_chart_data?instrument_name=BTC-PERPETUAL&start_timestamp=' + str(int(time.time()) * 1000 - 1000 * 60 * 60) + '&end_timestamp=' + str(int(time.time())* 1000) + '&resolution=1')
                 j = ohlcv.json()
                 o = []
                 h = []
@@ -642,6 +642,7 @@ class MarketMaker( object ):
                 
         self.ts[ 0 ][ BTC_SYMBOL ]    = vwap.iloc[-1]
         self.ts[ 0 ][ 'timestamp' ]  = datetime.utcnow()
+        print(self.ts[0])
     def update_vols( self ):
         
         if self.monitor:
