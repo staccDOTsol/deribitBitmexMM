@@ -8,6 +8,15 @@ from utils          import ( get_logger, lag, print_dict, print_dict_of_dicts, s
                              ticksize_ceil, ticksize_floor, ticksize_round )
 import ccxt
 import time
+from blackscholes import black_scholes
+import time
+from datetime import datetime
+#   >>> black_scholes(7598.45, 7000, 0.09587902546296297, 0.679, 0.03, 0.0, -1)
+#   >>> black_scholes(7598.45, 9000, 0.09587902546296297, 0.675, 0.03, 0.0, 1)
+from deribit_api    import RestClient
+import math
+from utils          import ( get_logger, lag, print_dict, print_dict_of_dicts, sort_by_key,
+                             ticksize_ceil, ticksize_floor, ticksize_round )
 
 
 
@@ -21,6 +30,7 @@ import argparse, logging, math, os, pathlib, sys, time, traceback
 
 from deribit_api    import RestClient
 import ccxt
+
 exchanges = ['deribit', 'hitbtc2', 'binance', 'bitfinex', 'kraken', 'bittrex',  'kucoin']
 print (len(exchanges))
 clients = {}
@@ -79,7 +89,8 @@ SECONDS_IN_DAY      = 3600 * 24
 SECONDS_IN_YEAR     = 365 * SECONDS_IN_DAY
 WAVELEN_MTIME_CHK   = 15        # time in seconds between check for file change
 WAVELEN_OUT         = 15        # time in seconds between output to terminal
-WAVELEN_TS          = 60       # time in seconds between time series update
+WAVELEN_TS          = 15       # time in seconds between time series update
+
 VOL_PRIOR           = 150       # vol estimation starting level in percentage pts
 EWMA_WGT_COV        *= PCT
 MKT_IMPACT          *= BP
@@ -92,6 +103,14 @@ VOL_PRIOR           *= PCT
 class MarketMaker( object ):
     
     def __init__( self, monitor = True, output = True ):
+        self.calls = []
+        self.puts = []
+        self.options = {}
+        self.lscount = 0
+        self.trade_ids = []
+        self.trade_ts = 99999999999999999999999999999
+        self.traded_notional = 0
+        self.traded_notional_usd = 0
         self.equity_usd         = None
         self.equity_btc         = None
         self.eth = 0
@@ -191,15 +210,39 @@ class MarketMaker( object ):
         self.update_status()
         
         now     = datetime.utcnow()
+        spot = self.get_spot()
         days    = ( now - self.start_time ).total_seconds() / SECONDS_IN_DAY
+        trades = clients['deribit'].fetchTrades('BTC-PERPETUAL')
+        b = 1
+        notional =  0
+        notional_btc = 0
+        while b != 0:
+            a = 0
+
+            for t in trades:
+                if a == 0:
+                    tsfirst = t['timestamp']
+                ts=(t['timestamp'])
+                if ts > self.trade_ts:
+                    b = 0
+                if (t['id'] not in self.trade_ids):
+                    notional = notional + float(t['info']['quantity']) * 10
+                    notional_btc = notional / spot
+                    self.trade_ids.append(t['id'])
+                a = a + 1
+            trades = clients['deribit'].fetchTrades('BTC-PERPETUAL', ts - 250)
+        self.traded_notional = self.traded_notional + notional_btc
+        self.traded_notional_usd = self.traded_notional_usd + notional
         print( '********************************************************************' )
         print( 'Start Time:        %s' % self.start_time.strftime( '%Y-%m-%d %H:%M:%S' ))
         print( 'Current Time:      %s' % now.strftime( '%Y-%m-%d %H:%M:%S' ))
         print( 'Days:              %s' % round( days, 1 ))
         print( 'Hours:             %s' % round( days * 24, 1 ))
         print( 'Spot Price:        %s' % self.get_spot())
-        
-        
+        print('Notional USD since last loop: ' + str(notional))
+        print('Notional BTC since last loop: ' + str(notional_btc))
+        print('Total traded notional USD: ' + str(self.traded_notional_usd))
+        print('Total traded notional BTC: ' + str(self.traded_notional))
         pnl_usd = self.equity_usd - self.equity_usd_init
         pnl_btc = self.equity_btc - self.equity_btc_init
         
@@ -454,6 +497,10 @@ class MarketMaker( object ):
             # Update time series and vols
             if ( t_now - t_ts ).total_seconds() >= WAVELEN_TS:
                 t_ts = t_now
+                self.lscount = self.lscount + 1
+                if self.lscount >= 1:
+                    self.lscount = 0
+                    self.long_straddles()
                 self.update_timeseries()
                 self.update_vols()
     
@@ -495,6 +542,33 @@ class MarketMaker( object ):
         
         self.create_client()
         self.client.cancelall()
+        trades = clients['deribit'].fetchTrades('BTC-PERPETUAL')
+        a = 0
+        for t in trades:
+            if a == 0:
+                tsfirst = t['timestamp']
+            ts=(t['timestamp'])
+            self.trade_ids.append(t['id'])
+            a = a + 1
+        a = 0
+        s = ts
+        while a <= 100:
+            s = s  - 50
+            #print(s)
+            trades = clients['deribit'].fetchTrades('BTC-PERPETUAL', s)
+            b = 0
+            for t in trades:
+                if t['timestamp'] < self.trade_ts:
+                    self.trade_ts = t['timestamp']
+                if b == 0:
+                    tsfirst = t['timestamp']
+                ts=(t['timestamp'])
+                if (t['id'] not in self.trade_ids):
+                    self.trade_ids.append(t['id'])
+                b = b + 1
+            a = a + 1
+
+        print(self.trade_ids)
         self.logger = get_logger( 'root', LOG_LEVEL )
         # Get all futures contracts
         self.get_futures()
@@ -550,7 +624,196 @@ class MarketMaker( object ):
             if pos[ 'instrument' ] in self.futures:
                 self.positions[ pos[ 'instrument' ]] = pos
         
-    
+    def long_straddles(self):
+        therisk = (self.equity_usd)
+        
+        if therisk < 0:
+            therisk = therisk * -1
+        tty = datetime(2019,12,27).strftime('%s')
+
+        theyield = 0.1541
+
+        spot = self.client.index()[ 'btc' ]
+
+        insts               = self.client.getinstruments()
+        options        = sort_by_key( { 
+            i[ 'instrumentName' ]: i for i in insts  if i[ 'kind' ] == 'option' and 'BTC' in i['instrumentName']
+        } )
+        exps = []
+        strikes = []
+
+        calls = []
+        profits = {}
+        puts = []
+        es = {}
+        for o in options:
+            exp = datetime.strptime(options[o]['expiration'][:-13], '%Y-%m-%d')
+            exps.append(exp.strftime('%s'))
+            strikes.append(int(options[o]['strike']))
+        a = -1
+        #print(iv)
+        strikes = list(dict.fromkeys(strikes))
+        exps = list(dict.fromkeys(exps))
+        #print(len(options))
+        z = -1
+        y = -1
+        ivs = {}
+        insts = {}
+        has = {}
+        optionsignore = []
+        
+        for o in options:
+            z = z + 1
+            #print(z)
+            #print(client.getorderbook(options[o]['instrumentName']))
+            ob = self.client.getorderbook(options[o]['instrumentName'])
+            ivs[options[o]['instrumentName']] = ob['bidIv'] / 100
+            bids = ob['bids']
+            asks = ob['asks']
+            lb = 99
+            ha = 0
+            for bid in bids:
+                if bid['price'] < lb:
+                    lb = bid['price']
+
+            for ask in asks:
+                if ask['price'] > ha:
+                    ha = ask['price']
+            if ha == 0:
+                optionsignore.append(options[o]['instrumentName'])
+            has[options[o]['instrumentName']] = ha
+
+        strikec = []
+        strikep = []
+        pexps = []
+        for o in self.calls:
+            strikec.append(int(options[o]['strike']))
+        for o in self.puts:
+            strikep.append(int(options[o]['strike']))
+            exp = datetime.strptime(options[o]['expiration'][:-13], '%Y-%m-%d')
+            pexps.append(exp.strftime('%s'))
+        abc = 0
+        while abc < len(self.calls):
+            now = time.time() 
+            if ((int(pexps[abc]) - int(now)) / 60 / 60 / 24 / 365 > 0):
+                diff = (int(pexps[abc]) - int(now)) / 60 / 60 / 24 / 365
+                p1 = black_scholes(spot, strikep[abc], diff, ivs[self.puts[abc]], 0.03, 0.0, -1) 
+                c1 = black_scholes(spot, strikec[abc], diff, ivs[self.calls[abc]], 0.03, 0.0, 1) 
+                
+                c2 = black_scholes(spot * 1.05, strikep[abc], diff, ivs[self.puts[abc]], 0.03, 0.0, -1) 
+                p2 = black_scholes(spot * 1.05, strikec[abc], diff, ivs[self.calls[abc]], 0.03, 0.0, 1) 
+                c3 = black_scholes(spot * 0.95, strikep[abc], diff, ivs[self.puts[abc]], 0.03, 0.0, -1) 
+                p3 = black_scholes(spot * 0.95, strikec[abc], diff, ivs[self.calls[abc]], 0.03, 0.0, 1) 
+                cost1 =(c1 + p1)
+                cost2 = (c2 + p2)
+                cost3 = (c3 + p3)
+                profit=(cost2-cost1)+(cost3-cost1)  
+                oldp = self.options[self.calls[abc] +self.puts[abc]]  * profit
+                therisk = therisk - oldp
+                abc = abc + 1
+
+        for e in exps:
+            #z = z + 1
+            #print(z)
+            calls = []
+            puts = []
+            civs = {}
+            pivs = {}
+            costc = []
+            costp = []
+            instsp = []
+            instsc = []
+            now = time.time() 
+            if ((int(e) - int(now)) / 60 / 60 / 24 / 365 > 0):
+                diff = (int(e) - int(now)) / 60 / 60 / 24 / 365
+
+                for s in strikes:
+                    a = a + 1
+                    #print(a)
+                    for o in options:
+                        if 'BTC' in options[o]['instrumentName'] and options[o]['instrumentName'] not in optionsignore:
+                            iv = ivs[options[o]['instrumentName']]
+                            if iv != 0:
+                                exp2 = datetime.strptime(options[o]['expiration'][:-13], '%Y-%m-%d').strftime('%s')
+                                
+                                if((options[o]['optionType'] == 'call' and (options[o]['strike']) == s) and exp2 == e):
+                                    calls.append(s)
+                                    #print(calls)
+                                    civs[s] = iv
+                                    pivs[s] = iv
+
+                                    costc.append(has[options[o]['instrumentName']])
+                                    instsc.append(options[o]['instrumentName'])
+
+                                    
+                                if((options[o]['optionType'] == 'put' and (options[o]['strike']) == s) and exp2 == e):
+                                    
+                                    puts.append(s)
+                                    #print(puts)
+                                    civs[s] = iv
+                                    pivs[s] = iv
+                                    costp.append(has[options[o]['instrumentName']])
+                                    instsp.append(options[o]['instrumentName'])
+
+            #print(len(puts))
+            #print(len(calls))
+            ccount = -1
+            for c in calls:
+                ccount = ccount+1
+                pcount = -1
+                for p in puts:
+                    pcount = pcount + 1
+                    p1 = black_scholes(spot, p, diff, pivs[p], 0.03, 0.0, -1) 
+                    c1 = black_scholes(spot, c, diff, civs[c], 0.03, 0.0, 1) 
+                    
+                    c2 = black_scholes(spot * 1.05, p, diff, pivs[p], 0.03, 0.0, -1) 
+                    p2 = black_scholes(spot * 1.05, c, diff, civs[c], 0.03, 0.0, 1) 
+                    c3 = black_scholes(spot * 0.95, p, diff, pivs[p], 0.03, 0.0, -1) 
+                    p3 = black_scholes(spot * 0.95, c, diff, civs[c], 0.03, 0.0, 1) 
+                    cost1 =(c1 + p1)
+                    cost2 = (c2 + p2)
+                    cost3 = (c3 + p3)
+                    profit=(cost2-cost1)+(cost3-cost1)
+                    #print(profit)
+                    profits[profit] = {'price': costp[pcount] + costc[ccount], 'costc': costc[ccount], 'costp': costp[pcount],'call s' : c, 'put s': p, 'call': instsc[ccount],'put': instsp[pcount],  'e': e}
+                    #print(profits[profit])
+                    #for pos in positions:
+                        #if 'BTC' in  pos['instrument']:
+                            #print(pos['floatingPl'] * 100)4
+
+        biggest = 0
+        costed = {}
+        for p in profits.keys():
+            costed[p] = (profits[p]['price'] * (therisk/(p+profits[p]['price'] * spot)))
+            costed[p] = (therisk/p)*profits[p]['price']
+            if p > biggest:
+                biggest = p
+        smallest = 9999999999999999
+        for c in costed:
+            #print(costed[c])
+            if float(costed[c]) < smallest:
+                smallest = float(costed[c])
+                w1 = c
+        if exposure > 0:
+            print(' ')
+            print('exposure: ' + str(therisk))
+            print('cost to buy: ' + str(smallest))
+
+            print('profit per unit at +/- 5%: ' + str(w1))
+            print('exposure covered: ' + str(smallest / profits[w1]['price'] * w1))
+            print(profits[w1])
+            if (smallest / 2 > profits[w1]['costc'] and smallest / 2 > profits[w1]['costp']):
+                self.options[profits[w1]['call'] + profits[w1]['put']] = smallest / profits[w1]['price']
+                qty = smallest / 2
+                qty = qty / 10
+                qty = math.ceil(qty)
+                qty = qty * 10
+
+                self.client.buy(profits[w1]['put'], qty, profits[w1]['costp'] )
+                self.client.buy(profits[w1]['call'], qty, profits[w1]['costc'] )
+                self.calls.append(profits[w1]['call'])
+                self.puts.append(profits[w1]['put'])
+
     def update_timeseries( self ):
         
         if self.monitor:
