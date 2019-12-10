@@ -20,7 +20,7 @@ import argparse, logging, math, os, pathlib, sys, time, traceback
 
 from deribit_api    import RestClient
 import ccxt
-exchanges = ['deribit', 'hitbtc2', 'binance', 'bitfinex', 'kraken', 'okex', 'bittrex', 'poloniex', 'kucoin']
+exchanges = ['deribit', 'hitbtc2', 'binance', 'bitfinex', 'kraken', 'okex', 'bittrex',  'kucoin']
 print (len(exchanges))
 clients = {}
 for i in exchanges:
@@ -561,101 +561,90 @@ class MarketMaker( object ):
         spot                    = self.get_spot()
         self.ts[ 0 ][ BTC_SYMBOL ]    = spot
         
-        for c in self.futures.keys():
-            
-            bbo = self.get_bbo( c )
-            bid = bbo[ 'bid' ]
-            ask = bbo[ 'ask' ]
+    
+        
+        vwap = {}
+        ohlcv2 = {}
+        for i in clients:
+            coin = 'BTC/USDT'
+            if i == 'kraken':
+                coin = 'BTC/USD'
+            if i == 'hitbtc2':
+                coin = 'BTC/USDT20'
+            if i == 'coinbasepro':
+                coin = 'BTC/USD'
+            if i == 'deribit':
+                coin = 'BTC-PERPETUAL'
 
-            if not bid is None and not ask is None:
-                mid = 0.5 * ( bbo[ 'bid' ] + bbo[ 'ask' ] )
-                
+            ohlcv = clients[i].fetchOHLCV(coin, '1m')
+            if i == 'deribit':
+                ohlcv = requests.get('https://www.deribit.com/api/v2/public/get_tradingview_chart_data?instrument_name=BTC-PERPETUAL&start_timestamp=' + str(int(time.time()) * 1000 - 1000 * 60 * 200) + '&end_timestamp=' + str(int(time.time())* 1000) + '&resolution=1')
+                j = ohlcv.json()
+                o = []
+                h = []
+                l = []
+                c = []
+                v = []
+                for b in j['result']['open']:
+                    o.append( b )
+            
+                for b in j['result']['high']:
+                    h.append(b)
+                for b in j['result']['low']:
+                    l.append(b)
+                for b in j['result']['close']:
+                    c.append(b)
+                for b in j['result']['volume']:
+                    v.append(b)
+                abc = 0
+                for b in j['result']['open']:
+                    if i not in ohlcv2:
+                        ohlcv2[i] = []
+                    ohlcv2[i].append([o[abc], h[abc], l[abc], c[abc], v[abc]])
+                    abc = abc + 1
             else:
-                continue
-            self.ts[ 0 ][ c ]               = mid
+                for o in ohlcv:
+                    if i not in ohlcv2:
+                        ohlcv2[i] = []
+                    ohlcv2[i].append([o[1], o[2], o[3], o[4], o[5]])
+            if i == 'deribit':
+                ddf = pd.DataFrame(ohlcv2[i], columns=['open', 'high', 'low', 'close', 'volume'])
+                dvwap = TA.VWAP(ddf)
+           
+        o = {}
+        h = {}
+        l = {}
+        c = {}
+        v = {}
+        a = 0
+        for ohlcv in ohlcv2:
+            if a not in o:
+                o[a] = 0
+            o[a] = o[a] + float(ohlcv2[ohlcv][a][0])
+            if a not in h:
+                h[a] = 0
+            h[a] = h[a] + float(ohlcv2[ohlcv][a][1])
+            if a not in l:
+                l[a] = 0
+            l[a] = l[a] + float(ohlcv2[ohlcv][a][2])
+            if a not in c:
+                c[a] = 0
+            c[a] = c[a] + float(ohlcv2[ohlcv][a][3])
+            if a not in v:
+                v[a] = 0
+            v[a] = v[a] + float(ohlcv2[ohlcv][a][4])
+            
+            a = a + 1
+        final = []
+        for b in o:
+            final.append([o[b], h[b], l[b], c[b], v[b]])
+        df = pd.DataFrame(final, columns=['open', 'high', 'low', 'close', 'volume'])
+        vwap = TA.VWAP(df)
+        self.ts[ 0 ][ 'BTC-PERPETUAL' ]               = (dvwap.iloc[-1] + vwap.iloc[-1]) / 2
                 
         self.ts[ 0 ][ 'timestamp' ]  = datetime.utcnow()
-        
     def update_vols( self ):
-        for s in self.futures:
-            vwap = {}
-            ohlcv2 = {}
-            for i in clients:
-                coin = 'BTC/USDT'
-                if i == 'kraken':
-                    coin = 'BTC/USD'
-                if i == 'hitbtc2':
-                    coin = 'BTC/USDT20'
-                if i == 'coinbasepro':
-                    coin = 'BTC/USD'
-                if i == 'deribit':
-                    coin = 'BTC-PERPETUAL'
-
-                ohlcv = clients[i].fetchOHLCV(coin, '5m')
-                if i == 'deribit':
-                    ohlcv = requests.get('https://www.deribit.com/api/v2/public/get_tradingview_chart_data?instrument_name=BTC-PERPETUAL&start_timestamp=' + str(int(time.time()) * 1000 - 1000 * 60 * 200) + '&end_timestamp=' + str(int(time.time())* 1000) + '&resolution=5')
-                    j = ohlcv.json()
-                    o = []
-                    h = []
-                    l = []
-                    c = []
-                    v = []
-                    for b in j['result']['open']:
-                        o.append( b )
-                
-                    for b in j['result']['high']:
-                        h.append(b)
-                    for b in j['result']['low']:
-                        l.append(b)
-                    for b in j['result']['close']:
-                        c.append(b)
-                    for b in j['result']['volume']:
-                        v.append(b)
-                    abc = 0
-                    for b in j['result']['open']:
-                        if i not in ohlcv2:
-                            ohlcv2[i] = []
-                        ohlcv2[i].append([o[abc], h[abc], l[abc], c[abc], v[abc]])
-                        abc = abc + 1
-                else:
-                    for o in ohlcv:
-                        if i not in ohlcv2:
-                            ohlcv2[i] = []
-                        ohlcv2[i].append([o[1], o[2], o[3], o[4], o[5]])
-                if i == 'deribit':
-                    ddf = pd.DataFrame(ohlcv2[i], columns=['open', 'high', 'low', 'close', 'volume'])
-                    dvwap = TA.VWAP(ddf)
-               
-            o = {}
-            h = {}
-            l = {}
-            c = {}
-            v = {}
-            a = 0
-            for ohlcv in ohlcv2:
-                if a not in o:
-                    o[a] = 0
-                o[a] = o[a] + float(ohlcv2[ohlcv][a][0])
-                if a not in h:
-                    h[a] = 0
-                h[a] = h[a] + float(ohlcv2[ohlcv][a][1])
-                if a not in l:
-                    l[a] = 0
-                l[a] = l[a] + float(ohlcv2[ohlcv][a][2])
-                if a not in c:
-                    c[a] = 0
-                c[a] = c[a] + float(ohlcv2[ohlcv][a][3])
-                if a not in v:
-                    v[a] = 0
-                v[a] = v[a] + float(ohlcv2[ohlcv][a][4])
-                
-                a = a + 1
-            final = []
-            for b in o:
-                final.append([o[b], h[b], l[b], c[b], v[b]])
-            df = pd.DataFrame(final, columns=['open', 'high', 'low', 'close', 'volume'])
-            vwap = TA.VWAP(df)
-            #print((dvwap.iloc[-1] + vwap.iloc[-1]) / 2)
+        
         if self.monitor:
             return None
         
@@ -664,16 +653,21 @@ class MarketMaker( object ):
         
         t   = [ ts[ i ][ 'timestamp' ] for i in range( NLAGS + 1 ) ]
         p   = { c: None for c in self.vols.keys() }
+        for c in ts[ 0 ].keys():
+            p[ c ] = [ ts[ i ][ c ] for i in range( NLAGS + 1 ) ]
+            
         if any( x is None for x in t ):
-            print('t none')
             return None
+        for c in self.vols.keys():
+            if any( x is None for x in p[ c ] ):
+                return None
+        
         NSECS   = SECONDS_IN_YEAR
         cov_cap = COV_RETURN_CAP / NSECS
         
         for s in self.vols.keys():
-
-            x   = [(dvwap.iloc[-1] + vwap.iloc[-1]) / 2, (dvwap.iloc[-2] + vwap.iloc[-2]) / 2, (dvwap.iloc[-3] + vwap.iloc[-3]) / 2]           
-            print(x)
+            
+            x   = p[ s ]            
             dx  = x[ 0 ] / x[ 1 ] - 1
             dt  = ( t[ 0 ] - t[ 1 ] ).total_seconds()
             v   = min( dx ** 2 / dt, cov_cap ) * NSECS
