@@ -63,8 +63,8 @@ parser.add_argument( '--no-restart',
 args    = parser.parse_args()
 URL     = 'https://test.deribit.com'
 
-KEY     = 'ODcHv6Uq'
-SECRET  = 'uhXpPkANIEkAgoJ0dX8mpLM9lvfc99IfZTGS1I4WhQ8'
+KEY     = 'tWzXf2TQ'
+SECRET  = 'RQD2w8BQAPwYshtXbbMh31Lt78mWA6z_rOxpBodktH8'
 
 BP                  = 1e-4      # one basis point
 BTC_SYMBOL          = 'btc'
@@ -107,7 +107,7 @@ class MarketMaker( object ):
         self.max_pos = 0
         self.puts = []
         self.options = { }
-        self.lscount = 4 * 5 - 1
+        self.lscount = 4 * 60 - 1
         self.trade_ids = []
         self.trade_ts = 99999999999999999999999999999
         self.traded_notional = 0
@@ -467,7 +467,7 @@ class MarketMaker( object ):
         try:
             strMsg = 'RESTARTING'
             print( strMsg )
-            self.client.cancelall()
+            #self.client.cancelall()
             strMsg += ' '
             for i in range( 0, 5 ):
                 strMsg += '.'
@@ -502,7 +502,7 @@ class MarketMaker( object ):
             if ( t_now - t_ts ).total_seconds() >= WAVELEN_TS:
                 t_ts = t_now
                 self.lscount = self.lscount + 1
-                if self.lscount >= 4 * 5:
+                if self.lscount >= 4 * 60:
                     self.lscount = 0
                     self.long_straddles()
                 self.update_timeseries()
@@ -545,7 +545,7 @@ class MarketMaker( object ):
     def run_first( self ):
         
         self.create_client()
-        self.client.cancelall()
+        #self.client.cancelall()
         trades = clients['deribit'].fetchTrades('BTC-PERPETUAL')
         a = 0
         for t in trades:
@@ -629,16 +629,17 @@ class MarketMaker( object ):
                 self.positions[ pos[ 'instrument' ]] = pos
         
     def long_straddles(self):
-        therisk = (self.equity_usd* 100) / self.max_pos 
+        therisk = (self.equity_usd * 1.5) / self.max_pos 
         
         if therisk < 0:
             therisk = therisk * -1
         tty = datetime(2019,12,27).strftime('%s')
 
         theyield = 0.1541
-
+        amts = {}
         spot = self.client.index()[ 'btc' ]
-
+        lower = math.floor((spot - 5000) / 1000) * 1000
+        higher = math.ceil((spot + 5000 ) / 1000) * 1000
         insts               = self.client.getinstruments()
         options        = sort_by_key( { 
             i[ 'instrumentName' ]: i for i in insts  if i[ 'kind' ] == 'option' and 'BTC' in i['instrumentName']
@@ -650,7 +651,11 @@ class MarketMaker( object ):
         profits = {}
         puts = []
         es = {}
+        names = []
+        remember = {}
         for o in options:
+            remember[options[o]['instrumentName']] = options[o]
+            names.append(options[o]['instrumentName'])
             exp = datetime.strptime(options[o]['expiration'][:-13], '%Y-%m-%d')
             exps.append(exp.strftime('%s'))
             strikes.append(int(options[o]['strike']))
@@ -683,38 +688,89 @@ class MarketMaker( object ):
             for ask in asks:
                 if ask['price'] < la:
                     la = ask['price']
-            if la == 99:
+            if hb == 0:
                 optionsignore.append(options[o]['instrumentName'])
-            has[options[o]['instrumentName']] = la
+            has[options[o]['instrumentName']] = hb
+            ords        = self.client.getopenorders( options[o]['instrumentName'] )
+            expsBids = {}
+            bid_ords    = [ o for o in ords ]
+            for bids in bid_ords:
+                ob = self.client.getorderbook(bids['instrument'])
+                ivs[bids['instrument']] = ob['bidIv'] / 100
+                bida = ob['bids']
+                aska = ob['asks']
+                la = 99
+                hb = 0
+                for bid in bida:
+                    if bid['price'] > hb:
+                        hb = bid['price']
 
+                for ask in aska:
+                    if ask['price'] < la:
+                        la = ask['price']
+                if bids['price'] != hb:
+                    self.client.edit( bids['orderId'], bids['quantity'] - bids['filledQuantity'], hb )
+                    print('edit options order for best bid!')
+            positions       = self.client.positions()
+            for option in options:
+                bid_ords    = [ o for o in positions if remember[options[option]['instrumentName']]['optionType'] == 'put' and options[option]['instrumentName'] == o['instrument']  ]
+                for bid in bid_ords:
+                    if remember[bid['instrument']] not in self.puts:
+                        self.puts.append(remember[bid['instrument']])
+                        amts[bid['instrument']] = bid['size']
+                bid_ords    = [ o for o in positions if remember[options[option]['instrumentName']]['optionType'] == 'call' and options[option]['instrumentName'] == o['instrument']  ]
+                for bid in bid_ords:
+                    if remember[bid['instrument']] not in self.calls:
+                        self.calls.append(remember[bid['instrument']])
+                        amts[bid['instrument']] = bid['size']
+            
+            for option in options:
+                bid_ords    = [ o for o in ords if remember[options[option]['instrumentName']]['optionType'] == 'put' and options[option]['instrumentName'] == o['instrument']  ]
+                for bid in bid_ords:
+                    if remember[bid['instrument']] not in self.puts:
+                        self.puts.append(remember[bid['instrument']])
+                        amts[bid['instrument']] = bid['quantity']
+                bid_ords    = [ o for o in ords if remember[options[option]['instrumentName']]['optionType'] == 'call' and options[option]['instrumentName'] == o['instrument']  ]
+                for bid in bid_ords:
+                    if remember[bid['instrument']] not in self.calls:
+                        self.calls.append(remember[bid['instrument']])
+                        amts[bid['instrument']] = bid['quantity']
         strikec = []
         strikep = []
         pexps = []
-        for o in self.calls:
-            strikec.append(int(options[o]['strike']))
-        for o in self.puts:
-            strikep.append(int(options[o]['strike']))
-            exp = datetime.strptime(options[o]['expiration'][:-13], '%Y-%m-%d')
-            pexps.append(exp.strftime('%s'))
+
+        for o in self.calls:   
+            for o2 in self.puts:
+                if o['expiration'] == o2['expiration']:
+
+                    strikec.append(int(o['strike']))
+                    strikep.append(int(o2['strike']))
+                    exp = datetime.strptime(o['expiration'][:-13], '%Y-%m-%d')
+                    pexps.append(exp.strftime('%s'))    
+        
         abc = 0
+        oldp = 0
         while abc < len(self.calls):
             now = time.time() 
+
             diff = (int(pexps[abc]) - int(now)) / 60 / 60 / 24 / 365
-            p1 = black_scholes(spot, strikep[abc], diff, ivs[self.puts[abc]], 0.03, 0.0, -1) 
-            c1 = black_scholes(spot, strikec[abc], diff, ivs[self.calls[abc]], 0.03, 0.0, 1) 
+            p1 = black_scholes(spot, strikep[abc], diff, ivs[self.puts[abc]['instrumentName']], 0.03, 0.0, -1) 
+            c1 = black_scholes(spot, strikec[abc], diff, ivs[self.calls[abc]['instrumentName']], 0.03, 0.0, 1) 
             
-            c2 = black_scholes(spot * 1.1, strikep[abc], diff, ivs[self.puts[abc]], 0.03, 0.0, -1) 
-            p2 = black_scholes(spot * 1.1, strikec[abc], diff, ivs[self.calls[abc]], 0.03, 0.0, 1) 
-            c3 = black_scholes(spot * 0.9, strikep[abc], diff, ivs[self.puts[abc]], 0.03, 0.0, -1) 
-            p3 = black_scholes(spot * 0.9, strikec[abc], diff, ivs[self.calls[abc]], 0.03, 0.0, 1) 
+            c2 = black_scholes(spot * 1.05, strikep[abc], diff, ivs[self.puts[abc]['instrumentName']], 0.03, 0.0, -1) 
+            p2 = black_scholes(spot * 1.05, strikec[abc], diff, ivs[self.calls[abc]['instrumentName']], 0.03, 0.0, 1) 
+            c3 = black_scholes(spot * 0.95, strikep[abc], diff, ivs[self.puts[abc]['instrumentName']], 0.03, 0.0, -1) 
+            p3 = black_scholes(spot * 0.95, strikec[abc], diff, ivs[self.calls[abc]['instrumentName']], 0.03, 0.0, 1) 
             cost1 =(c1 + p1)
             cost2 = (c2 + p2)
             cost3 = (c3 + p3)
             profit=(cost2-cost1)+(cost3-cost1)  
-            oldp = self.options[self.calls[abc] +self.puts[abc]]  * profit
+            oldp = oldp  + profit * amts[self.calls[abc]['instrumentName']]
+            
+            print('oldp: ' + str(oldp))
             therisk = therisk - oldp
             abc = abc + 1
-
+        therisk = therisk * 1.5        
         if therisk > 0:        
             for e in exps:
                 #z = z + 1
@@ -728,7 +784,7 @@ class MarketMaker( object ):
                 instsp = []
                 instsc = []
                 now = time.time() 
-                if ((int(e) - int(now)) / 60 / 60 / 24 / 365 > 1 / 365 * 60):
+                if ((int(e) - int(now)) / 60 / 60 / 24 / 365 > 1 / 365 * 20):
                     diff = (int(e) - int(now)) / 60 / 60 / 24 / 365
 
                     for s in strikes:
@@ -740,7 +796,7 @@ class MarketMaker( object ):
                                 if iv != 0:
                                     exp2 = datetime.strptime(options[o]['expiration'][:-13], '%Y-%m-%d').strftime('%s')
                                     
-                                    if((options[o]['optionType'] == 'call' and (options[o]['strike']) == s) and exp2 == e):
+                                    if((options[o]['optionType'] == 'call' and (options[o]['strike']) == s) and (options[o]['strike']) <= higher and (options[o]['strike']) >= lower and exp2 == e):
                                         calls.append(s)
                                         #print(calls)
                                         civs[s] = iv
@@ -750,7 +806,7 @@ class MarketMaker( object ):
                                         instsc.append(options[o]['instrumentName'])
 
                                         
-                                    if((options[o]['optionType'] == 'put' and (options[o]['strike']) == s) and exp2 == e):
+                                    if((options[o]['optionType'] == 'put' and (options[o]['strike']) == s) and (options[o]['strike']) <= higher and (options[o]['strike']) >= lower and exp2 == e):
                                         
                                         puts.append(s)
                                         #print(puts)
@@ -806,16 +862,18 @@ class MarketMaker( object ):
                 print('profit per unit at +/- 5%: ' + str(w1))
                 print('exposure covered: ' + str(smallest / profits[w1]['price'] * w1))
                 print(profits[w1])
-                self.options[profits[w1]['call'] + profits[w1]['put']] = smallest / profits[w1]['price']
+                #self.options[profits[w1]['call'] + profits[w1]['put']] = smallest / profits[w1]['price']
                 qty = smallest / 2
-                qty = qty * 10
-                qty = math.ceil(qty)
-                qty = qty / 10
+                qty = qty * (profits[w1]['costc'] +  profits[w1]['costp'] ) / 2 * 0.66
 
-                print(self.client.buy(profits[w1]['put'], qty, profits[w1]['costp'] ))
-                print(self.client.buy(profits[w1]['call'], qty, profits[w1]['costc'] ))
-                self.calls.append(profits[w1]['call'])
-                self.puts.append(profits[w1]['put'])
+                
+                print(profits[w1]['put'])
+                print(qty)
+                print(qty, profits[w1]['costp'] )
+                self.client.buy(profits[w1]['put'], qty, profits[w1]['costp'] )
+                self.client.buy(profits[w1]['call'], qty, profits[w1]['costc'] )
+                #self.calls.append(profits[w1]['call'])
+                #self.puts.append(profits[w1]['put'])
             except Exception as e:
                 e = e
     def update_timeseries( self ):
@@ -950,8 +1008,8 @@ if __name__ == '__main__':
         mmbot = MarketMaker( monitor = args.monitor, output = args.output )
         mmbot.run()
     except( KeyboardInterrupt, SystemExit ):
-        print( "Cancelling open orders" )
-        mmbot.client.cancelall()
+        #print( "Cancelling open orders" )
+        #mmbot.client.cancelall()
         sys.exit()
     except:
         print( traceback.format_exc())
