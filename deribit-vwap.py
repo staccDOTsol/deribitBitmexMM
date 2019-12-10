@@ -7,6 +7,10 @@ from time           import sleep
 from utils          import ( get_logger, lag, print_dict, print_dict_of_dicts, sort_by_key,
                              ticksize_ceil, ticksize_floor, ticksize_round )
 import ccxt
+import time
+
+
+import requests
 from finta import TA
 
 import pandas as pd
@@ -587,19 +591,41 @@ class MarketMaker( object ):
                     coin = 'BTC/USD'
                 if i == 'deribit':
                     coin = 'BTC-PERPETUAL'
-                print(i)
-                try:
-                    ohlcv = clients[i].fetchOHLCV(coin, '1m')
-                    
+                ohlcv = clients[i].fetchOHLCV(coin, '30m')
+                if i == 'deribit':
+                    ohlcv = requests.get('https://www.deribit.com/api/v2/public/get_tradingview_chart_data?instrument_name=BTC-PERPETUAL&start_timestamp=' + str(int(time.time()) * 1000 - 1000 * 60 * 200) + '&end_timestamp=' + str(int(time.time())* 1000) + '&resolution=30')
+                    j = ohlcv.json()
+                    o = []
+                    h = []
+                    l = []
+                    c = []
+                    v = []
+                    for b in j['result']['open']:
+                        o.append( b )
+                
+                    for b in j['result']['high']:
+                        h.append(b)
+                    for b in j['result']['low']:
+                        l.append(b)
+                    for b in j['result']['close']:
+                        c.append(b)
+                    for b in j['result']['volume']:
+                        v.append(b)
+                    abc = 0
+                    for b in j['result']['open']:
+                        if i not in ohlcv2:
+                            ohlcv2[i] = []
+                        ohlcv2[i].append([o[abc], h[abc], l[abc], c[abc], v[abc]])
+                        abc = abc + 1
+                else:
                     for o in ohlcv:
                         if i not in ohlcv2:
                             ohlcv2[i] = []
                         ohlcv2[i].append([o[1], o[2], o[3], o[4], o[5]])
-                    if i == 'deribit':
-                        ddf = pd.DataFrame(ohlcv2[i], columns=['open', 'high', 'low', 'close', 'volume'])
-                        dvwap = TA.VWAP(ddf)
-                except Exception as e:
-                    print(e)
+                if i == 'deribit':
+                    ddf = pd.DataFrame(ohlcv2[i], columns=['open', 'high', 'low', 'close', 'volume'])
+                    dvwap = TA.VWAP(ddf)
+               
             o = {}
             h = {}
             l = {}
@@ -629,7 +655,7 @@ class MarketMaker( object ):
                 final.append([o[b], h[b], l[b], c[b], v[b]])
             df = pd.DataFrame(final, columns=['open', 'high', 'low', 'close', 'volume'])
             vwap = TA.VWAP(df)
-            print((dvwap.iloc[-1] + vwap.iloc[-1]) / 2)
+            #print((dvwap.iloc[-1] + vwap.iloc[-1]) / 2)
         if self.monitor:
             return None
         
@@ -638,28 +664,24 @@ class MarketMaker( object ):
         
         t   = [ ts[ i ][ 'timestamp' ] for i in range( NLAGS + 1 ) ]
         p   = { c: None for c in self.vols.keys() }
-        for c in ts[ 0 ].keys():
-            p[ c ] = [ ts[ i ][ c ] for i in range( NLAGS + 1 ) ]
-            
-        if any( x is None for x in t ):
-            return None
-        for c in self.vols.keys():
-            if any( x is None for x in p[ c ] ):
-                return None
-        
+
         NSECS   = SECONDS_IN_YEAR
         cov_cap = COV_RETURN_CAP / NSECS
         
         for s in self.vols.keys():
-            try:
-                x   = [(dvwap.iloc[-1] + vwap.iloc[-1]) / 2, (dvwap.iloc[-2] + vwap.iloc[-2]) / 2, (dvwap.iloc[-3] + vwap.iloc[-3]) / 2]           
-                dx  = x[ 0 ] / x[ 1 ] - 1
-                dt  = ( t[ 0 ] - t[ 1 ] ).total_seconds()
-                v   = min( dx ** 2 / dt, cov_cap ) * NSECS
-                v   = w * v + ( 1 - w ) * self.vols[ s ] ** 2
-                self.vols[ s ] = math.sqrt( v )
-            except Excetion as e:
-                print(e)
+
+            x   = [(dvwap.iloc[-1] + vwap.iloc[-1]) / 2, (dvwap.iloc[-2] + vwap.iloc[-2]) / 2, (dvwap.iloc[-3] + vwap.iloc[-3]) / 2]           
+            print(x)
+            dx  = x[ 0 ] / x[ 1 ] - 1
+            if t[1] == None:
+                t[1] = datetime.now()
+            if t[0] == None:
+                t[0] = datetime.now()
+            dt  = ( t[ 0 ] - t[ 1 ] ).total_seconds()
+            v   = min( dx ** 2 / dt, cov_cap ) * NSECS
+            v   = w * v + ( 1 - w ) * self.vols[ s ] ** 2
+            self.vols[ s ] = math.sqrt( v )
+       
 if __name__ == '__main__':
     
     try:
