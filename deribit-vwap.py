@@ -575,7 +575,6 @@ class MarketMaker( object ):
             self.ts[ 0 ][ c ]               = mid
                 
         self.ts[ 0 ][ 'timestamp' ]  = datetime.utcnow()
-
         
     def update_vols( self ):
         for s in self.futures:
@@ -665,7 +664,9 @@ class MarketMaker( object ):
         
         t   = [ ts[ i ][ 'timestamp' ] for i in range( NLAGS + 1 ) ]
         p   = { c: None for c in self.vols.keys() }
-
+        if any( x is None for x in t ):
+            print('t none')
+            return None
         NSECS   = SECONDS_IN_YEAR
         cov_cap = COV_RETURN_CAP / NSECS
         
@@ -674,10 +675,6 @@ class MarketMaker( object ):
             x   = [(dvwap.iloc[-1] + vwap.iloc[-1]) / 2, (dvwap.iloc[-2] + vwap.iloc[-2]) / 2, (dvwap.iloc[-3] + vwap.iloc[-3]) / 2]           
             print(x)
             dx  = x[ 0 ] / x[ 1 ] - 1
-            if t[1] == None:
-                t[1] = datetime.now()
-            if t[0] == None:
-                t[0] = datetime.now()
             dt  = ( t[ 0 ] - t[ 1 ] ).total_seconds()
             v   = min( dx ** 2 / dt, cov_cap ) * NSECS
             v   = w * v + ( 1 - w ) * self.vols[ s ] ** 2
