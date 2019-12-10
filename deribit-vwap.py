@@ -20,7 +20,7 @@ import argparse, logging, math, os, pathlib, sys, time, traceback
 
 from deribit_api    import RestClient
 import ccxt
-exchanges = ['deribit', 'hitbtc2', 'binance', 'bitfinex', 'kraken', 'okex', 'bittrex',  'kucoin']
+exchanges = ['deribit', 'poloniex', 'hitbtc2', 'binance', 'bitfinex', 'kraken', 'okex', 'bittrex',  'kucoin']
 print (len(exchanges))
 clients = {}
 for i in exchanges:
