@@ -591,9 +591,10 @@ class MarketMaker( object ):
                     coin = 'BTC/USD'
                 if i == 'deribit':
                     coin = 'BTC-PERPETUAL'
-                ohlcv = clients[i].fetchOHLCV(coin, '1m')
+
+                ohlcv = clients[i].fetchOHLCV(coin, '5m')
                 if i == 'deribit':
-                    ohlcv = requests.get('https://www.deribit.com/api/v2/public/get_tradingview_chart_data?instrument_name=BTC-PERPETUAL&start_timestamp=' + str(int(time.time()) * 1000 - 1000 * 60 * 200) + '&end_timestamp=' + str(int(time.time())* 1000) + '&resolution=1')
+                    ohlcv = requests.get('https://www.deribit.com/api/v2/public/get_tradingview_chart_data?instrument_name=BTC-PERPETUAL&start_timestamp=' + str(int(time.time()) * 1000 - 1000 * 60 * 200) + '&end_timestamp=' + str(int(time.time())* 1000) + '&resolution=5')
                     j = ohlcv.json()
                     o = []
                     h = []
