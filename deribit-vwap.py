@@ -63,8 +63,8 @@ parser.add_argument( '--no-restart',
 args    = parser.parse_args()
 URL     = 'https://test.deribit.com'
 
-KEY     = '0VGQn6S2'
-SECRET  = 'QV617FixdyvS-THLj2UlU9LfBB1MpjgGEt7hDy_n788'
+KEY     = 'ODcHv6Uq'
+SECRET  = 'uhXpPkANIEkAgoJ0dX8mpLM9lvfc99IfZTGS1I4WhQ8'
 
 BP                  = 1e-4      # one basis point
 BTC_SYMBOL          = 'btc'
@@ -104,9 +104,10 @@ class MarketMaker( object ):
     
     def __init__( self, monitor = True, output = True ):
         self.calls = []
+        self.max_pos = 0
         self.puts = []
-        self.options = {}
-        self.lscount = 0
+        self.options = { }
+        self.lscount = 4 * 5 - 1
         self.trade_ids = []
         self.trade_ts = 99999999999999999999999999999
         self.traded_notional = 0
@@ -318,7 +319,10 @@ class MarketMaker( object ):
             qtybtc  = max( PCT_QTY_BASE  * bal_btc, min_order_size_btc)
             nbids   = min( math.trunc( pos_lim_long  / qtybtc ), MAX_LAYERS )
             nasks   = min( math.trunc( pos_lim_short / qtybtc ), MAX_LAYERS )
-            
+            if(pos_lim_long > pos_lim_short):
+                self.pos_max = pos_lim_long
+            else:
+                self.pos_max = pos_lim_short
             place_bids = nbids > 0
             place_asks = nasks > 0
             
@@ -498,7 +502,7 @@ class MarketMaker( object ):
             if ( t_now - t_ts ).total_seconds() >= WAVELEN_TS:
                 t_ts = t_now
                 self.lscount = self.lscount + 1
-                if self.lscount >= 1:
+                if self.lscount >= 4 * 5:
                     self.lscount = 0
                     self.long_straddles()
                 self.update_timeseries()
@@ -625,7 +629,7 @@ class MarketMaker( object ):
                 self.positions[ pos[ 'instrument' ]] = pos
         
     def long_straddles(self):
-        therisk = (self.equity_usd)
+        therisk = (self.equity_usd / self.max_pos) * 2
         
         if therisk < 0:
             therisk = therisk * -1
@@ -695,22 +699,21 @@ class MarketMaker( object ):
         abc = 0
         while abc < len(self.calls):
             now = time.time() 
-            if ((int(pexps[abc]) - int(now)) / 60 / 60 / 24 / 365 > 0):
-                diff = (int(pexps[abc]) - int(now)) / 60 / 60 / 24 / 365
-                p1 = black_scholes(spot, strikep[abc], diff, ivs[self.puts[abc]], 0.03, 0.0, -1) 
-                c1 = black_scholes(spot, strikec[abc], diff, ivs[self.calls[abc]], 0.03, 0.0, 1) 
-                
-                c2 = black_scholes(spot * 1.05, strikep[abc], diff, ivs[self.puts[abc]], 0.03, 0.0, -1) 
-                p2 = black_scholes(spot * 1.05, strikec[abc], diff, ivs[self.calls[abc]], 0.03, 0.0, 1) 
-                c3 = black_scholes(spot * 0.95, strikep[abc], diff, ivs[self.puts[abc]], 0.03, 0.0, -1) 
-                p3 = black_scholes(spot * 0.95, strikec[abc], diff, ivs[self.calls[abc]], 0.03, 0.0, 1) 
-                cost1 =(c1 + p1)
-                cost2 = (c2 + p2)
-                cost3 = (c3 + p3)
-                profit=(cost2-cost1)+(cost3-cost1)  
-                oldp = self.options[self.calls[abc] +self.puts[abc]]  * profit
-                therisk = therisk - oldp
-                abc = abc + 1
+            diff = (int(pexps[abc]) - int(now)) / 60 / 60 / 24 / 365
+            p1 = black_scholes(spot, strikep[abc], diff, ivs[self.puts[abc]], 0.03, 0.0, -1) 
+            c1 = black_scholes(spot, strikec[abc], diff, ivs[self.calls[abc]], 0.03, 0.0, 1) 
+            
+            c2 = black_scholes(spot * 1.1, strikep[abc], diff, ivs[self.puts[abc]], 0.03, 0.0, -1) 
+            p2 = black_scholes(spot * 1.1, strikec[abc], diff, ivs[self.calls[abc]], 0.03, 0.0, 1) 
+            c3 = black_scholes(spot * 0.9, strikep[abc], diff, ivs[self.puts[abc]], 0.03, 0.0, -1) 
+            p3 = black_scholes(spot * 0.9, strikec[abc], diff, ivs[self.calls[abc]], 0.03, 0.0, 1) 
+            cost1 =(c1 + p1)
+            cost2 = (c2 + p2)
+            cost3 = (c3 + p3)
+            profit=(cost2-cost1)+(cost3-cost1)  
+            oldp = self.options[self.calls[abc] +self.puts[abc]]  * profit
+            therisk = therisk - oldp
+            abc = abc + 1
 
         if therisk > 0:        
             for e in exps:
@@ -725,7 +728,7 @@ class MarketMaker( object ):
                 instsp = []
                 instsc = []
                 now = time.time() 
-                if ((int(e) - int(now)) / 60 / 60 / 24 / 365 > 0):
+                if ((int(e) - int(now)) / 60 / 60 / 24 / 365 > 1 / 365 * 60):
                     diff = (int(e) - int(now)) / 60 / 60 / 24 / 365
 
                     for s in strikes:
@@ -767,10 +770,10 @@ class MarketMaker( object ):
                         p1 = black_scholes(spot, p, diff, pivs[p], 0.03, 0.0, -1) 
                         c1 = black_scholes(spot, c, diff, civs[c], 0.03, 0.0, 1) 
                         
-                        c2 = black_scholes(spot * 1.05, p, diff, pivs[p], 0.03, 0.0, -1) 
-                        p2 = black_scholes(spot * 1.05, c, diff, civs[c], 0.03, 0.0, 1) 
-                        c3 = black_scholes(spot * 0.95, p, diff, pivs[p], 0.03, 0.0, -1) 
-                        p3 = black_scholes(spot * 0.95, c, diff, civs[c], 0.03, 0.0, 1) 
+                        c2 = black_scholes(spot * 1.1, p, diff, pivs[p], 0.03, 0.0, -1) 
+                        p2 = black_scholes(spot * 1.1, c, diff, civs[c], 0.03, 0.0, 1) 
+                        c3 = black_scholes(spot * 0.9, p, diff, pivs[p], 0.03, 0.0, -1) 
+                        p3 = black_scholes(spot * 0.9, c, diff, civs[c], 0.03, 0.0, 1) 
                         cost1 =(c1 + p1)
                         cost2 = (c2 + p2)
                         cost3 = (c3 + p3)
@@ -795,14 +798,14 @@ class MarketMaker( object ):
                 if float(costed[c]) < smallest:
                     smallest = float(costed[c])
                     w1 = c
-            print(' ')
-            print('exposure: ' + str(therisk))
-            print('cost to buy: ' + str(smallest))
+            try:        
+                print(' ')
+                print('exposure: ' + str(therisk))
+                print('cost to buy: ' + str(smallest))
 
-            print('profit per unit at +/- 5%: ' + str(w1))
-            print('exposure covered: ' + str(smallest / profits[w1]['price'] * w1))
-            print(profits[w1])
-            if (smallest / 2 > profits[w1]['costc'] and smallest / 2 > profits[w1]['costp']):
+                print('profit per unit at +/- 5%: ' + str(w1))
+                print('exposure covered: ' + str(smallest / profits[w1]['price'] * w1))
+                print(profits[w1])
                 self.options[profits[w1]['call'] + profits[w1]['put']] = smallest / profits[w1]['price']
                 qty = smallest / 2
                 qty = qty / 10
@@ -813,7 +816,8 @@ class MarketMaker( object ):
                 self.client.buy(profits[w1]['call'], qty, profits[w1]['costc'] )
                 self.calls.append(profits[w1]['call'])
                 self.puts.append(profits[w1]['put'])
-
+            except Exception as e:
+                e = e
     def update_timeseries( self ):
         
         if self.monitor:
