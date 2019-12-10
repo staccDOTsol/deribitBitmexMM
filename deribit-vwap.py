@@ -73,7 +73,7 @@ PCT_LIM_LONG        = 800       # % position limit long
 PCT_LIM_SHORT       = 1600       # % position limit short
 PCT_QTY_BASE        = 1000       # pct order qty in bps as pct of acct on each order
 MIN_LOOP_TIME       =   0.1       # Minimum time between loops
-RISK_CHARGE_VOL     =   1   # vol risk charge in bps per 100 vol
+RISK_CHARGE_VOL     =   7.5   # vol risk charge in bps per 100 vol
 SECONDS_IN_DAY      = 3600 * 24
 SECONDS_IN_YEAR     = 365 * SECONDS_IN_DAY
 WAVELEN_MTIME_CHK   = 15        # time in seconds between check for file change
@@ -574,9 +574,9 @@ class MarketMaker( object ):
             if i == 'deribit':
                 coin = 'BTC-PERPETUAL'
 
-            ohlcv = clients[i].fetchOHLCV(coin, '30m')
+            ohlcv = clients[i].fetchOHLCV(coin, '5m')
             if i == 'deribit':
-                ohlcv = requests.get('https://www.deribit.com/api/v2/public/get_tradingview_chart_data?instrument_name=BTC-PERPETUAL&start_timestamp=' + str(int(time.time()) * 1000 - 1000 * 60 * 200) + '&end_timestamp=' + str(int(time.time())* 1000) + '&resolution=30')
+                ohlcv = requests.get('https://www.deribit.com/api/v2/public/get_tradingview_chart_data?instrument_name=BTC-PERPETUAL&start_timestamp=' + str(int(time.time()) * 1000 - 1000 * 60 * 200) + '&end_timestamp=' + str(int(time.time())* 1000) + '&resolution=5')
                 j = ohlcv.json()
                 o = []
                 h = []
