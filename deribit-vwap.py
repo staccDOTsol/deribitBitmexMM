@@ -558,8 +558,6 @@ class MarketMaker( object ):
         for t in range( NLAGS, 0, -1 ):
             self.ts[ t ]    = cp.deepcopy( self.ts[ t - 1 ] )
         
-        spot                    = self.get_spot()
-        self.ts[ 0 ][ BTC_SYMBOL ]    = spot
         
     
         
@@ -640,8 +638,9 @@ class MarketMaker( object ):
             final.append([o[b], h[b], l[b], c[b], v[b]])
         df = pd.DataFrame(final, columns=['open', 'high', 'low', 'close', 'volume'])
         vwap = TA.VWAP(df)
-        self.ts[ 0 ][ 'BTC-PERPETUAL' ]               = (dvwap.iloc[-1] + vwap.iloc[-1]) / 2
+        self.ts[ 0 ][ 'BTC-PERPETUAL' ]               = dvwap.iloc[-1] 
                 
+        self.ts[ 0 ][ BTC_SYMBOL ]    = vwap.iloc[-1]
         self.ts[ 0 ][ 'timestamp' ]  = datetime.utcnow()
     def update_vols( self ):
         
