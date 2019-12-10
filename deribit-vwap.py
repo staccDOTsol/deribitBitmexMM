@@ -670,18 +670,18 @@ class MarketMaker( object ):
             ivs[options[o]['instrumentName']] = ob['bidIv'] / 100
             bids = ob['bids']
             asks = ob['asks']
-            lb = 99
-            ha = 0
+            la = 99
+            hb = 0
             for bid in bids:
-                if bid['price'] < lb:
-                    lb = bid['price']
+                if bid['price'] > hb:
+                    hb = bid['price']
 
             for ask in asks:
-                if ask['price'] > ha:
-                    ha = ask['price']
-            if ha == 0:
+                if ask['price'] < la:
+                    la = ask['price']
+            if la == 99:
                 optionsignore.append(options[o]['instrumentName'])
-            has[options[o]['instrumentName']] = ha
+            has[options[o]['instrumentName']] = la
 
         strikec = []
         strikep = []
@@ -712,89 +712,89 @@ class MarketMaker( object ):
                 therisk = therisk - oldp
                 abc = abc + 1
 
-        for e in exps:
-            #z = z + 1
-            #print(z)
-            calls = []
-            puts = []
-            civs = {}
-            pivs = {}
-            costc = []
-            costp = []
-            instsp = []
-            instsc = []
-            now = time.time() 
-            if ((int(e) - int(now)) / 60 / 60 / 24 / 365 > 0):
-                diff = (int(e) - int(now)) / 60 / 60 / 24 / 365
+        if therisk > 0:        
+            for e in exps:
+                #z = z + 1
+                #print(z)
+                calls = []
+                puts = []
+                civs = {}
+                pivs = {}
+                costc = []
+                costp = []
+                instsp = []
+                instsc = []
+                now = time.time() 
+                if ((int(e) - int(now)) / 60 / 60 / 24 / 365 > 0):
+                    diff = (int(e) - int(now)) / 60 / 60 / 24 / 365
 
-                for s in strikes:
-                    a = a + 1
-                    #print(a)
-                    for o in options:
-                        if 'BTC' in options[o]['instrumentName'] and options[o]['instrumentName'] not in optionsignore:
-                            iv = ivs[options[o]['instrumentName']]
-                            if iv != 0:
-                                exp2 = datetime.strptime(options[o]['expiration'][:-13], '%Y-%m-%d').strftime('%s')
-                                
-                                if((options[o]['optionType'] == 'call' and (options[o]['strike']) == s) and exp2 == e):
-                                    calls.append(s)
-                                    #print(calls)
-                                    civs[s] = iv
-                                    pivs[s] = iv
-
-                                    costc.append(has[options[o]['instrumentName']])
-                                    instsc.append(options[o]['instrumentName'])
-
+                    for s in strikes:
+                        a = a + 1
+                        #print(a)
+                        for o in options:
+                            if 'BTC' in options[o]['instrumentName'] and options[o]['instrumentName'] not in optionsignore:
+                                iv = ivs[options[o]['instrumentName']]
+                                if iv != 0:
+                                    exp2 = datetime.strptime(options[o]['expiration'][:-13], '%Y-%m-%d').strftime('%s')
                                     
-                                if((options[o]['optionType'] == 'put' and (options[o]['strike']) == s) and exp2 == e):
-                                    
-                                    puts.append(s)
-                                    #print(puts)
-                                    civs[s] = iv
-                                    pivs[s] = iv
-                                    costp.append(has[options[o]['instrumentName']])
-                                    instsp.append(options[o]['instrumentName'])
+                                    if((options[o]['optionType'] == 'call' and (options[o]['strike']) == s) and exp2 == e):
+                                        calls.append(s)
+                                        #print(calls)
+                                        civs[s] = iv
+                                        pivs[s] = iv
 
-            #print(len(puts))
-            #print(len(calls))
-            ccount = -1
-            for c in calls:
-                ccount = ccount+1
-                pcount = -1
-                for p in puts:
-                    pcount = pcount + 1
-                    p1 = black_scholes(spot, p, diff, pivs[p], 0.03, 0.0, -1) 
-                    c1 = black_scholes(spot, c, diff, civs[c], 0.03, 0.0, 1) 
-                    
-                    c2 = black_scholes(spot * 1.05, p, diff, pivs[p], 0.03, 0.0, -1) 
-                    p2 = black_scholes(spot * 1.05, c, diff, civs[c], 0.03, 0.0, 1) 
-                    c3 = black_scholes(spot * 0.95, p, diff, pivs[p], 0.03, 0.0, -1) 
-                    p3 = black_scholes(spot * 0.95, c, diff, civs[c], 0.03, 0.0, 1) 
-                    cost1 =(c1 + p1)
-                    cost2 = (c2 + p2)
-                    cost3 = (c3 + p3)
-                    profit=(cost2-cost1)+(cost3-cost1)
-                    #print(profit)
-                    profits[profit] = {'price': costp[pcount] + costc[ccount], 'costc': costc[ccount], 'costp': costp[pcount],'call s' : c, 'put s': p, 'call': instsc[ccount],'put': instsp[pcount],  'e': e}
-                    #print(profits[profit])
-                    #for pos in positions:
-                        #if 'BTC' in  pos['instrument']:
-                            #print(pos['floatingPl'] * 100)4
+                                        costc.append(has[options[o]['instrumentName']])
+                                        instsc.append(options[o]['instrumentName'])
 
-        biggest = 0
-        costed = {}
-        for p in profits.keys():
-            costed[p] = (profits[p]['price'] * (therisk/(p+profits[p]['price'] * spot)))
-            costed[p] = (therisk/p)*profits[p]['price']
-            if p > biggest:
-                biggest = p
-        smallest = 9999999999999999
-        for c in costed:
-            #print(costed[c])
-            if float(costed[c]) < smallest:
-                smallest = float(costed[c])
-                w1 = c
-        if exposure > 0:
+                                        
+                                    if((options[o]['optionType'] == 'put' and (options[o]['strike']) == s) and exp2 == e):
+                                        
+                                        puts.append(s)
+                                        #print(puts)
+                                        civs[s] = iv
+                                        pivs[s] = iv
+                                        costp.append(has[options[o]['instrumentName']])
+                                        instsp.append(options[o]['instrumentName'])
+
+                #print(len(puts))
+                #print(len(calls))
+                ccount = -1
+                for c in calls:
+                    ccount = ccount+1
+                    pcount = -1
+                    for p in puts:
+                        pcount = pcount + 1
+                        p1 = black_scholes(spot, p, diff, pivs[p], 0.03, 0.0, -1) 
+                        c1 = black_scholes(spot, c, diff, civs[c], 0.03, 0.0, 1) 
+                        
+                        c2 = black_scholes(spot * 1.05, p, diff, pivs[p], 0.03, 0.0, -1) 
+                        p2 = black_scholes(spot * 1.05, c, diff, civs[c], 0.03, 0.0, 1) 
+                        c3 = black_scholes(spot * 0.95, p, diff, pivs[p], 0.03, 0.0, -1) 
+                        p3 = black_scholes(spot * 0.95, c, diff, civs[c], 0.03, 0.0, 1) 
+                        cost1 =(c1 + p1)
+                        cost2 = (c2 + p2)
+                        cost3 = (c3 + p3)
+                        profit=(cost2-cost1)+(cost3-cost1)
+                        #print(profit)
+                        profits[profit] = {'price': costp[pcount] + costc[ccount], 'costc': costc[ccount], 'costp': costp[pcount],'call s' : c, 'put s': p, 'call': instsc[ccount],'put': instsp[pcount],  'e': e}
+                        #print(profits[profit])
+                        #for pos in positions:
+                            #if 'BTC' in  pos['instrument']:
+                                #print(pos['floatingPl'] * 100)4
+
+            biggest = 0
+            costed = {}
+            for p in profits.keys():
+                costed[p] = (profits[p]['price'] * (therisk/(p+profits[p]['price'] * spot)))
+                costed[p] = (therisk/p)*profits[p]['price']
+                if p > biggest:
+                    biggest = p
+            smallest = 9999999999999999
+            for c in costed:
+                #print(costed[c])
+                if float(costed[c]) < smallest:
+                    smallest = float(costed[c])
+                    w1 = c
             print(' ')
             print('exposure: ' + str(therisk))
             print('cost to buy: ' + str(smallest))
