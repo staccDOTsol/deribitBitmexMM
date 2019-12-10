@@ -629,7 +629,7 @@ class MarketMaker( object ):
                 self.positions[ pos[ 'instrument' ]] = pos
         
     def long_straddles(self):
-        therisk = (self.equity_usd / self.max_pos) 
+        therisk = (self.equity_usd* 100) / self.max_pos 
         
         if therisk < 0:
             therisk = therisk * -1
