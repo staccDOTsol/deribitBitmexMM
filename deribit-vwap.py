@@ -81,8 +81,8 @@ MAX_LAYERS          =  3        # max orders to layer the ob with on each side
 MKT_IMPACT          =  0      # base 1-sided spread between bid/offer
 NLAGS               =  2     # number of lags in time series
 PCT                 = 100 * BP  # one percentage point
-PCT_LIM_LONG        = 800       # % position limit long
-PCT_LIM_SHORT       = 1600       # % position limit short
+PCT_LIM_LONG        = 200       # % position limit long
+PCT_LIM_SHORT       = 400     # % position limit short
 PCT_QTY_BASE        = 1000       # pct order qty in bps as pct of acct on each order
 MIN_LOOP_TIME       =   0.1       # Minimum time between loops
 RISK_CHARGE_VOL     =   4   # vol risk charge in bps per 100 vol
@@ -324,7 +324,8 @@ class MarketMaker( object ):
                 self.max_pos = pos_lim_short
             place_bids = nbids > 0
             place_asks = nasks > 0
-            
+            print(pos_lim_long)
+            print(pos_lim_short)
             if not place_bids and not place_asks:
                 print( 'No bid no offer for %s' % fut, min_order_size_btc )
                 continue
