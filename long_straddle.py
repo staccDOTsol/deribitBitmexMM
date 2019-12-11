@@ -13,8 +13,8 @@ from utils          import ( get_logger, lag, print_dict, print_dict_of_dicts, s
                              ticksize_ceil, ticksize_floor, ticksize_round )
 while True:
     puts = []
-    calls = [] #order size * (higher of pct lim long/short) * 10
-    therisk = (720) * (400 / 100) * 10 
+    calls = [] #order size * (higher of pct lim long/short) * 10 / lev
+    therisk = ((720) * (400 / 100) * 10 ) / 100
     
     if therisk < 0:
         therisk = therisk * -1
