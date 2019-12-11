@@ -31,12 +31,11 @@ import argparse, logging, math, os, pathlib, sys, time, traceback
 from deribit_api    import RestClient
 import ccxt
 
-exchanges = ['deribit', 'hitbtc2', 'binance', 'bitfinex', 'kraken', 'bittrex',  'kucoin']
+exchanges = [ 'hitbtc2', 'binance', 'bitfinex', 'kraken', 'bittrex',  'kucoin']
 print (len(exchanges))
 clients = {}
 for i in exchanges:
     clients[i] = eval ('ccxt.%s ()' % i)
-
 # Add command line switches
 parser  = argparse.ArgumentParser( description = 'Bot' )
 
@@ -63,9 +62,11 @@ parser.add_argument( '--no-restart',
 args    = parser.parse_args()
 URL     = 'https://test.deribit.com'
 
-KEY     = 'tWzXf2TQ'
-SECRET  = 'RQD2w8BQAPwYshtXbbMh31Lt78mWA6z_rOxpBodktH8'
+KEY     = 'mT3COAQl'
+SECRET  = 'KEzBo5Amnl1vQts8AlYEM4pG_v6rzCGE3ev9s7VJAPY'
 
+clients['deribit'] = ccxt.deribit({"apiKey": KEY, "secret": SECRET})
+clients['deribit'].urls['api'] = URL
 BP                  = 1e-4      # one basis point
 BTC_SYMBOL          = 'btc'
 CONTRACT_SIZE       = 10        # USD
@@ -105,6 +106,7 @@ class MarketMaker( object ):
     def __init__( self, monitor = True, output = True ):
         self.calls = []
         self.max_pos = 0
+        self.order_size = 0
         self.puts = []
         self.options = { }
         self.lscount = 4 * 60 - 1
@@ -213,10 +215,12 @@ class MarketMaker( object ):
         now     = datetime.utcnow()
         spot = self.get_spot()
         days    = ( now - self.start_time ).total_seconds() / SECONDS_IN_DAY
-        trades = clients['deribit'].fetchTrades('BTC-PERPETUAL')
+        trades = clients['deribit'].fetchMyTrades('BTC-PERPETUAL')
         b = 1
         notional =  0
         notional_btc = 0
+        if (len(trades) == 0):
+            b = 0
         while b != 0:
             a = 0
 
@@ -231,7 +235,7 @@ class MarketMaker( object ):
                     notional_btc = notional / spot
                     self.trade_ids.append(t['id'])
                 a = a + 1
-            trades = clients['deribit'].fetchTrades('BTC-PERPETUAL', ts - 250)
+            trades = clients['deribit'].fetchMyTrades('BTC-PERPETUAL', ts - 250)
         self.traded_notional = self.traded_notional + notional_btc
         self.traded_notional_usd = self.traded_notional_usd + notional
         print( '********************************************************************' )
@@ -384,7 +388,8 @@ class MarketMaker( object ):
                     else:
                         prc = bids[ 0 ]
 
-                    qty = round( prc * qtybtc / con_sz )                        
+                    qty = round( prc * qtybtc / con_sz )   
+                    self.order_size = (qty * 10)                    
                     if 'ETH' in fut:
                         qty = round( prc * 450 * qtybtc / con_sz )            
                     if i < len_bid_ords:    
@@ -423,8 +428,10 @@ class MarketMaker( object ):
                         prc = asks[ 0 ]
                         
                     qty = round( prc * qtybtc / con_sz )
+                    self.order_size = (qty * 10)
                     if 'ETH' in fut:
                         qty = round( prc * 450 * qtybtc / con_sz )    
+                    
                     if i < len_ask_ords:
                         oid = ask_ords[ i ][ 'orderId' ]
                         try:
@@ -546,7 +553,7 @@ class MarketMaker( object ):
         
         self.create_client()
         #self.client.cancelall()
-        trades = clients['deribit'].fetchTrades('BTC-PERPETUAL')
+        trades = clients['deribit'].fetchMyTrades('BTC-PERPETUAL')
         a = 0
         for t in trades:
             if a == 0:
@@ -555,24 +562,27 @@ class MarketMaker( object ):
             self.trade_ids.append(t['id'])
             a = a + 1
         a = 0
-        s = ts
-        while a <= 100:
-            s = s  - 50
-            #print(s)
-            trades = clients['deribit'].fetchTrades('BTC-PERPETUAL', s)
-            b = 0
-            for t in trades:
-                if t['timestamp'] < self.trade_ts:
-                    self.trade_ts = t['timestamp']
-                if b == 0:
-                    tsfirst = t['timestamp']
-                ts=(t['timestamp'])
-                if (t['id'] not in self.trade_ids):
-                    self.trade_ids.append(t['id'])
-                b = b + 1
-            a = a + 1
+        try:
+            s = ts
+            while a <= 100:
+                s = s  - 50
+                #print(s)
+                trades = clients['deribit'].fetchMyTrades('BTC-PERPETUAL', s)
+                b = 0
+                for t in trades:
+                    if t['timestamp'] < self.trade_ts:
+                        self.trade_ts = t['timestamp']
+                    if b == 0:
+                        tsfirst = t['timestamp']
+                    ts=(t['timestamp'])
+                    if (t['id'] not in self.trade_ids):
+                        self.trade_ids.append(t['id'])
+                    b = b + 1
+                a = a + 1
 
-        print(self.trade_ids)
+            print(self.trade_ids)
+        except Exception as e:
+            e = e
         self.logger = get_logger( 'root', LOG_LEVEL )
         # Get all futures contracts
         self.get_futures()
@@ -629,7 +639,7 @@ class MarketMaker( object ):
                 self.positions[ pos[ 'instrument' ]] = pos
         
     def long_straddles(self):
-        therisk = (self.equity_usd) / self.max_pos 
+        therisk = (self.order_size) * self.max_pos 
         
         if therisk < 0:
             therisk = therisk * -1
@@ -718,11 +728,15 @@ class MarketMaker( object ):
                     if remember[bid['instrument']] not in self.puts:
                         self.puts.append(remember[bid['instrument']])
                         amts[bid['instrument']] = bid['size']
+                    else:
+                        amts[bid['instrument']] = amts[bid['instrument']] + bid['size']
                 bid_ords    = [ o for o in positions if remember[options[option]['instrumentName']]['optionType'] == 'call' and options[option]['instrumentName'] == o['instrument']  ]
                 for bid in bid_ords:
                     if remember[bid['instrument']] not in self.calls:
                         self.calls.append(remember[bid['instrument']])
                         amts[bid['instrument']] = bid['size']
+                    else:
+                        amts[bid['instrument']] = amts[bid['instrument']] + bid['size']
             
             for option in options:
                 bid_ords    = [ o for o in ords if remember[options[option]['instrumentName']]['optionType'] == 'put' and options[option]['instrumentName'] == o['instrument']  ]
@@ -730,11 +744,17 @@ class MarketMaker( object ):
                     if remember[bid['instrument']] not in self.puts:
                         self.puts.append(remember[bid['instrument']])
                         amts[bid['instrument']] = bid['quantity']
+                    else:
+                        amts[bid['instrument']] = amts[bid['instrument']] + bid['size']
+
                 bid_ords    = [ o for o in ords if remember[options[option]['instrumentName']]['optionType'] == 'call' and options[option]['instrumentName'] == o['instrument']  ]
                 for bid in bid_ords:
                     if remember[bid['instrument']] not in self.calls:
                         self.calls.append(remember[bid['instrument']])
                         amts[bid['instrument']] = bid['quantity']
+                    else:
+                        amts[bid['instrument']] = amts[bid['instrument']] + bid['size']
+
         strikec = []
         strikep = []
         pexps = []
@@ -757,10 +777,10 @@ class MarketMaker( object ):
             p1 = black_scholes(spot, strikep[abc], diff, ivs[self.puts[abc]['instrumentName']], 0.03, 0.0, -1) 
             c1 = black_scholes(spot, strikec[abc], diff, ivs[self.calls[abc]['instrumentName']], 0.03, 0.0, 1) 
             
-            c2 = black_scholes(spot * 1.05, strikep[abc], diff, ivs[self.puts[abc]['instrumentName']], 0.03, 0.0, -1) 
-            p2 = black_scholes(spot * 1.05, strikec[abc], diff, ivs[self.calls[abc]['instrumentName']], 0.03, 0.0, 1) 
-            c3 = black_scholes(spot * 0.95, strikep[abc], diff, ivs[self.puts[abc]['instrumentName']], 0.03, 0.0, -1) 
-            p3 = black_scholes(spot * 0.95, strikec[abc], diff, ivs[self.calls[abc]['instrumentName']], 0.03, 0.0, 1) 
+            c2 = black_scholes(spot * 1.925, strikep[abc], diff, ivs[self.puts[abc]['instrumentName']], 0.03, 0.0, -1) 
+            p2 = black_scholes(spot * 1.925, strikec[abc], diff, ivs[self.calls[abc]['instrumentName']], 0.03, 0.0, 1) 
+            c3 = black_scholes(spot * 0.975, strikep[abc], diff, ivs[self.puts[abc]['instrumentName']], 0.03, 0.0, -1) 
+            p3 = black_scholes(spot * 0.975, strikec[abc], diff, ivs[self.calls[abc]['instrumentName']], 0.03, 0.0, 1) 
             cost1 =(c1 + p1)
             cost2 = (c2 + p2)
             cost3 = (c3 + p3)
@@ -826,10 +846,10 @@ class MarketMaker( object ):
                         p1 = black_scholes(spot, p, diff, pivs[p], 0.03, 0.0, -1) 
                         c1 = black_scholes(spot, c, diff, civs[c], 0.03, 0.0, 1) 
                         
-                        c2 = black_scholes(spot * 1.2, p, diff, pivs[p], 0.03, 0.0, -1) 
-                        p2 = black_scholes(spot * 1.2, c, diff, civs[c], 0.03, 0.0, 1) 
-                        c3 = black_scholes(spot * 0.8, p, diff, pivs[p], 0.03, 0.0, -1) 
-                        p3 = black_scholes(spot * 0.8, c, diff, civs[c], 0.03, 0.0, 1) 
+                        c2 = black_scholes(spot * 1.05, p, diff, pivs[p], 0.03, 0.0, -1) 
+                        p2 = black_scholes(spot * 1.05, c, diff, civs[c], 0.03, 0.0, 1) 
+                        c3 = black_scholes(spot * 0.95, p, diff, pivs[p], 0.03, 0.0, -1) 
+                        p3 = black_scholes(spot * 0.95, c, diff, civs[c], 0.03, 0.0, 1) 
                         cost1 =(c1 + p1)
                         cost2 = (c2 + p2)
                         cost3 = (c3 + p3)
