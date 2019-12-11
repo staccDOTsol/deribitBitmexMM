@@ -7,6 +7,10 @@ from time           import sleep
 from utils          import ( get_logger, lag, print_dict, print_dict_of_dicts, sort_by_key,
                              ticksize_ceil, ticksize_floor, ticksize_round )
 import ccxt
+import requests
+import pandas as pd
+from finta import TA
+
 import json
 import copy as cp
 import argparse, logging, math, os, pathlib, sys, time, traceback
@@ -44,8 +48,8 @@ parser.add_argument( '--no-restart',
 args    = parser.parse_args()
 URL     = 'https://test.deribit.com'
 
-KEY     = '0VGQn6S2'
-SECRET  = 'QV617FixdyvS-THLj2UlU9LfBB1MpjgGEt7hDy_n788'
+KEY     = 'pUcNWyjC'
+SECRET  = 'iQaAEpwYEOnS-aJm7vlusoDDwYry00thwywe1mwDfZU'
 
 BP                  = 1e-4      # one basis point
 BTC_SYMBOL          = 'btc'
@@ -94,6 +98,9 @@ class MarketMaker( object ):
         self.futures            = OrderedDict()
         self.futures_prv        = OrderedDict()
         self.logger             = None
+        self.volatility = 0
+        self.price = 0
+        self.directional = 0
         self.mean_looptime      = 1
         self.monitor            = monitor
         self.output             = output or monitor
@@ -111,39 +118,70 @@ class MarketMaker( object ):
     def get_bbo( self, contract ): # Get best b/o excluding own orders
         
         # Get orderbook
-        ob      = self.client.getorderbook( contract )
-        bids    = ob[ 'bids' ]
-        asks    = ob[ 'asks' ]
-        
-        ords        = self.client.getopenorders( contract )
-        bid_ords    = [ o for o in ords if o[ 'direction' ] == 'buy'  ]
-        ask_ords    = [ o for o in ords if o[ 'direction' ] == 'sell' ]
-        best_bid    = None
-        best_ask    = None
+        if self.volatility == 0:
+            ob      = self.client.getorderbook( contract )
+            bids    = ob[ 'bids' ]
+            asks    = ob[ 'asks' ]
+            
+            ords        = self.client.getopenorders( contract )
+            bid_ords    = [ o for o in ords if o[ 'direction' ] == 'buy'  ]
+            ask_ords    = [ o for o in ords if o[ 'direction' ] == 'sell' ]
+            best_bid    = None
+            best_ask    = None
 
-        err = 10 ** -( self.get_precision( contract ) + 1 )
+            err = 10 ** -( self.get_precision( contract ) + 1 )
+            
+            for b in bids:
+                match_qty   = sum( [ 
+                    o[ 'quantity' ] for o in bid_ords 
+                    if math.fabs( b[ 'price' ] - o[ 'price' ] ) < err
+                ] )
+                if match_qty < b[ 'quantity' ]:
+                    best_bid = b[ 'price' ]
+                    break
+            
+            for a in asks:
+                match_qty   = sum( [ 
+                    o[ 'quantity' ] for o in ask_ords 
+                    if math.fabs( a[ 'price' ] - o[ 'price' ] ) < err
+                ] )
+                if match_qty < a[ 'quantity' ]:
+                    best_ask = a[ 'price' ]
+                    break
+            
+            return { 'bid': best_bid, 'ask': best_ask }
+        elif self.volatility == 1:
+            ohlcv = requests.get('https://www.deribit.com/api/v2/public/get_tradingview_chart_data?instrument_name=BTC-PERPETUAL&start_timestamp=' + str(int(time.time()) * 1000 - 1000 * 60 * 60) + '&end_timestamp=' + str(int(time.time())* 1000) + '&resolution=1')
+            j = ohlcv.json()
+            o = []
+            h = []
+            l = []
+            c = []
+            v = []
+            for b in j['result']['open']:
+                o.append( b )
         
-        for b in bids:
-            match_qty   = sum( [ 
-                o[ 'quantity' ] for o in bid_ords 
-                if math.fabs( b[ 'price' ] - o[ 'price' ] ) < err
-            ] )
-            if match_qty < b[ 'quantity' ]:
-                best_bid = b[ 'price' ]
-                break
+            for b in j['result']['high']:
+                h.append(b)
+            for b in j['result']['low']:
+                l.append(b)
+            for b in j['result']['close']:
+                c.append(b)
+            for b in j['result']['volume']:
+                v.append(b)
+            abc = 0
+            ohlcv2 = []
+            for b in j['result']['open']:
+                ohlcv2.append([o[abc], h[abc], l[abc], c[abc], v[abc]])
+                abc = abc + 1
         
-        for a in asks:
-            match_qty   = sum( [ 
-                o[ 'quantity' ] for o in ask_ords 
-                if math.fabs( a[ 'price' ] - o[ 'price' ] ) < err
-            ] )
-            if match_qty < a[ 'quantity' ]:
-                best_ask = a[ 'price' ]
-                break
-        
-        return { 'bid': best_bid, 'ask': best_ask }
-    
-        
+            ddf = pd.DataFrame(ohlcv2, columns=['open', 'high', 'low', 'close', 'volume'])
+            dvwap = TA.VWAP(ddf)
+            tsz = self.get_ticksize( 'BTC-PERPETUAL' )    
+            bid = ticksize_floor( dvwap.iloc[-1], tsz )
+            ask = ticksize_ceil( dvwap.iloc[-1], tsz )
+            print( { 'bid': bid, 'ask': ask })
+            return { 'bid': bid, 'ask': ask }
     def get_futures( self ): # Get all current futures instruments
         
         self.futures_prv    = cp.deepcopy( self.futures )
@@ -277,22 +315,17 @@ class MarketMaker( object ):
             tsz = self.get_ticksize( fut )            
             # Perform pricing
             vol = max( self.vols[ BTC_SYMBOL ], self.vols[ fut ] )
-
-            eps         = BP * vol * RISK_CHARGE_VOL
+            if self.price == 1:
+                eps         = BP * vol * RISK_CHARGE_VOL
+            elif self.price == 0:
+                eps = BP * 0.5 * RISK_CHARGE_VOL
             riskfac     = math.exp( eps )
 
             bbo     = self.get_bbo( fut )
             bid_mkt = bbo[ 'bid' ]
             ask_mkt = bbo[ 'ask' ]
             mid = 0.5 * ( bbo[ 'bid' ] + bbo[ 'ask' ] )
-            if 'ETH-PERPETUAL' in fut:
-                self.eth = mid
-            if bid_mkt is None and ask_mkt is None:
-                bid_mkt = ask_mkt = spot
-            elif bid_mkt is None:
-                bid_mkt = min( spot, ask_mkt )
-            elif ask_mkt is None:
-                ask_mkt = max( spot, bid_mkt )
+
             mid_mkt = 0.5 * ( bid_mkt + ask_mkt )
             
             ords        = self.client.getopenorders( fut )
@@ -304,7 +337,6 @@ class MarketMaker( object ):
                 bid_ords        = [ o for o in ords if o[ 'direction' ] == 'buy'  ]
                 len_bid_ords    = min( len( bid_ords ), nbids )
                 bid0            = mid_mkt * math.exp( -MKT_IMPACT )
-                
                 bids    = [ bid0 * riskfac ** -i for i in range( 1, nbids + 1 ) ]
 
                 bids[ 0 ]   = ticksize_floor( bids[ 0 ], tsz )
@@ -314,11 +346,9 @@ class MarketMaker( object ):
                 ask_ords        = [ o for o in ords if o[ 'direction' ] == 'sell' ]    
                 len_ask_ords    = min( len( ask_ords ), nasks )
                 ask0            = mid_mkt * math.exp(  MKT_IMPACT )
-                
                 asks    = [ ask0 * riskfac ** i for i in range( 1, nasks + 1 ) ]
-                
+
                 asks[ 0 ]   = ticksize_ceil( asks[ 0 ], tsz  )
-                
             for i in range( max( nbids, nasks )):
                 # BIDS
                 if place_bids and i < nbids:
@@ -433,7 +463,22 @@ class MarketMaker( object ):
         while True:
 
             self.get_futures()
-            
+            # Directional
+            # 0: none
+            #
+            # Price
+            # 0: none
+            # 1: vwap
+            #
+            # Volatility
+            # 0: none
+            # 1: ewma
+            with open('deribit-settings.json', 'r') as read_file:
+                data = json.load(read_file)
+                self.direcitonal = data['directional']
+                self.price = data['price']
+                self.volatility = data['volatility']
+
             # Restart if a new contract is listed
             if len( self.futures ) != len( self.futures_prv ):
                 self.restart()
