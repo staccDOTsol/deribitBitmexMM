@@ -110,6 +110,7 @@ class MarketMaker( object ):
         self.puts = []
         self.options = { }
         self.lscount = 4 * 60 - 1
+        self.cancelcount = 0
         self.trade_ids = []
         self.trade_ts = 99999999999999999999999999999
         self.traded_notional = 0
@@ -509,8 +510,12 @@ class MarketMaker( object ):
             if ( t_now - t_ts ).total_seconds() >= WAVELEN_TS:
                 t_ts = t_now
                 self.lscount = self.lscount + 1
-                if self.lscount >= 4 * 60:
+                if self.lscount >= 4 * 30:
                     self.lscount = 0
+                    self.cancelcount = self.cancelcount + 1
+                    if self.cancelcount >= 6:
+                        self.cancelcount = 0
+                        self.client.cancelall()
                     self.long_straddles()
                 self.update_timeseries()
                 self.update_vols()
@@ -639,7 +644,7 @@ class MarketMaker( object ):
                 self.positions[ pos[ 'instrument' ]] = pos
         
     def long_straddles(self):
-        therisk = (self.order_size) * self.max_pos 
+        therisk = (self.order_size / 100) * self.max_pos 
         
         if therisk < 0:
             therisk = therisk * -1
@@ -648,8 +653,8 @@ class MarketMaker( object ):
         theyield = 0.1541
         amts = {}
         spot = self.client.index()[ 'btc' ]
-        lower = math.floor((spot - 5000) / 1000) * 1000
-        higher = math.ceil((spot + 5000 ) / 1000) * 1000
+        lower = math.floor((spot - 2000) / 1000) * 1000
+        higher = math.ceil((spot + 2000 ) / 1000) * 1000
         insts               = self.client.getinstruments()
         options        = sort_by_key( { 
             i[ 'instrumentName' ]: i for i in insts  if i[ 'kind' ] == 'option' and 'BTC' in i['instrumentName']
@@ -679,6 +684,7 @@ class MarketMaker( object ):
         ivs = {}
         insts = {}
         has = {}
+        lbs = {}
         optionsignore = []
         
         for o in options:
@@ -700,7 +706,8 @@ class MarketMaker( object ):
                     la = ask['price']
             if hb == 0:
                 optionsignore.append(options[o]['instrumentName'])
-            has[options[o]['instrumentName']] = hb
+            has[options[o]['instrumentName']] = la
+            lbs[options[o]['instrumentName']] = hb
             ords        = self.client.getopenorders( options[o]['instrumentName'] )
             expsBids = {}
             bid_ords    = [ o for o in ords ]
