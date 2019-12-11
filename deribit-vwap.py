@@ -62,8 +62,8 @@ parser.add_argument( '--no-restart',
 args    = parser.parse_args()
 URL     = 'https://test.deribit.com'
 
-KEY     = 'mT3COAQl'
-SECRET  = 'KEzBo5Amnl1vQts8AlYEM4pG_v6rzCGE3ev9s7VJAPY'
+KEY     = 'pUcNWyjC'
+SECRET  = 'iQaAEpwYEOnS-aJm7vlusoDDwYry00thwywe1mwDfZU'
 
 clients['deribit'] = ccxt.deribit({"apiKey": KEY, "secret": SECRET})
 clients['deribit'].urls['api'] = URL
@@ -229,7 +229,7 @@ class MarketMaker( object ):
                 if a == 0:
                     tsfirst = t['timestamp']
                 ts=(t['timestamp'])
-                if ts > self.trade_ts:
+                if ts <= self.trade_ts:
                     b = 0
                 if (t['id'] not in self.trade_ids):
                     notional = notional + float(t['info']['quantity']) * 10

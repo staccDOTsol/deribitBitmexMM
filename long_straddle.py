@@ -5,8 +5,8 @@ from datetime import datetime
 #   >>> black_scholes(7598.45, 7000, 0.09587902546296297, 0.679, 0.03, 0.0, -1)
 #   >>> black_scholes(7598.45, 9000, 0.09587902546296297, 0.675, 0.03, 0.0, 1)
 from deribit_api    import RestClient
-KEY     = 'mT3COAQl'
-SECRET  = 'KEzBo5Amnl1vQts8AlYEM4pG_v6rzCGE3ev9s7VJAPY'
+KEY     = 'pUcNWyjC'
+SECRET  = 'iQaAEpwYEOnS-aJm7vlusoDDwYry00thwywe1mwDfZU'
 client = RestClient( KEY, SECRET, 'https://test.deribit.com' )
 import math
 from utils          import ( get_logger, lag, print_dict, print_dict_of_dicts, sort_by_key,
@@ -23,8 +23,8 @@ while True:
     theyield = 0.1541
     amts = {}
     spot = client.index()[ 'btc' ]
-    lower = math.floor((spot - 2000) / 1000) * 1000
-    higher = math.ceil((spot + 2000 ) / 1000) * 1000
+    lower = math.floor((spot - 5000) / 1000) * 1000
+    higher = math.ceil((spot + 5000 ) / 1000) * 1000
     insts               = client.getinstruments()
     options        = sort_by_key( { 
         i[ 'instrumentName' ]: i for i in insts  if i[ 'kind' ] == 'option' and 'BTC' in i['instrumentName']
@@ -199,7 +199,7 @@ while True:
                                     civs[s] = iv
                                     pivs[s] = iv
 
-                                    costc.append(lbs[options[o]['instrumentName']])
+                                    costc.append(has[options[o]['instrumentName']])
                                     instsc.append(options[o]['instrumentName'])
 
                                     
@@ -209,7 +209,7 @@ while True:
                                     #print(puts)
                                     civs[s] = iv
                                     pivs[s] = iv
-                                    costp.append(lbs[options[o]['instrumentName']])
+                                    costp.append(has[options[o]['instrumentName']])
                                     instsp.append(options[o]['instrumentName'])
 
             #print(len(puts))
@@ -261,10 +261,9 @@ while True:
             print(profits[w1])
             #self.options[profits[w1]['call'] + profits[w1]['put']] = smallest / profits[w1]['price']
             qty = smallest / 2
-            qty = qty / ((profits[w1]['costc'] +  profits[w1]['costp'] ) / 2) * 0.66
-            qty = qty / 10
-            qty = math.ceil(qty)
             qty = qty * 10
+            qty = math.ceil(qty)
+            qty = qty / 10
             print(profits[w1]['put'])
             print(qty)
             print(qty, profits[w1]['costp'] )
