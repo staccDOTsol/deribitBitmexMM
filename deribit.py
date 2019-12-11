@@ -118,7 +118,7 @@ class MarketMaker( object ):
     def get_bbo( self, contract ): # Get best b/o excluding own orders
         
         # Get orderbook
-        if self.volatility == 0:
+        if self.price == 0:
             ob      = self.client.getorderbook( contract )
             bids    = ob[ 'bids' ]
             asks    = ob[ 'asks' ]
@@ -150,7 +150,7 @@ class MarketMaker( object ):
                     break
             
             return { 'bid': best_bid, 'ask': best_ask }
-        elif self.volatility == 1:
+        elif self.price == 1:
             ohlcv = requests.get('https://www.deribit.com/api/v2/public/get_tradingview_chart_data?instrument_name=BTC-PERPETUAL&start_timestamp=' + str(int(time.time()) * 1000 - 1000 * 60 * 60) + '&end_timestamp=' + str(int(time.time())* 1000) + '&resolution=1')
             j = ohlcv.json()
             o = []
@@ -315,9 +315,9 @@ class MarketMaker( object ):
             tsz = self.get_ticksize( fut )            
             # Perform pricing
             vol = max( self.vols[ BTC_SYMBOL ], self.vols[ fut ] )
-            if self.price == 1:
+            if self.volatility == 1:
                 eps         = BP * vol * RISK_CHARGE_VOL
-            elif self.price == 0:
+            elif self.volatility == 0:
                 eps = BP * 0.5 * RISK_CHARGE_VOL
             riskfac     = math.exp( eps )
 
