@@ -864,8 +864,8 @@ class MarketMaker( object ):
                 print(profits[w1])
                 #self.options[profits[w1]['call'] + profits[w1]['put']] = smallest / profits[w1]['price']
                 qty = smallest / 2
-                qty = qty * (profits[w1]['costc'] +  profits[w1]['costp'] ) / 2 * 0.66
-
+                qty = qty / ((profits[w1]['costc'] +  profits[w1]['costp'] ) / 2) * 0.66
+                qty = math.ceil(qty)
                 
                 print(profits[w1]['put'])
                 print(qty)
