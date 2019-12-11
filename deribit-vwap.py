@@ -220,24 +220,18 @@ class MarketMaker( object ):
         b = 1
         notional =  0
         notional_btc = 0
-        if (len(trades) == 0):
-            b = 0
-        while b != 0:
-            a = 0
 
-            for t in trades:
-                if a == 0:
-                    tsfirst = t['timestamp']
-                ts=(t['timestamp'])
-                if ts <= self.trade_ts:
-                    b = 0
-                if (t['id'] not in self.trade_ids):
-                    notional = notional + float(t['info']['quantity']) * 10
-                    notional_btc = notional / spot
-                    self.trade_ids.append(t['id'])
-                a = a + 1
-            trades = clients['deribit'].fetchMyTrades('BTC-PERPETUAL', ts - 250)
-        self.traded_notional = self.traded_notional + notional_btc
+        for t in trades:
+            if a == 0:
+                tsfirst = t['timestamp']
+            ts=(t['timestamp'])
+            if ts <= self.trade_ts:
+                b = 0
+            if (t['id'] not in self.trade_ids):
+                notional = notional + float(t['info']['quantity']) * 10
+                notional_btc = notional / spot
+                self.trade_ids.append(t['id'])
+            a = a + 1
         self.traded_notional_usd = self.traded_notional_usd + notional
         print( '********************************************************************' )
         print( 'Start Time:        %s' % self.start_time.strftime( '%Y-%m-%d %H:%M:%S' ))
