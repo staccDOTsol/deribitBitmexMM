@@ -220,7 +220,7 @@ class MarketMaker( object ):
         b = 1
         notional =  0
         notional_btc = 0
-
+        a = 0
         for t in trades:
             if a == 0:
                 tsfirst = t['timestamp']
