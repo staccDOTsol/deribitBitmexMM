@@ -629,7 +629,7 @@ class MarketMaker( object ):
                 self.positions[ pos[ 'instrument' ]] = pos
         
     def long_straddles(self):
-        therisk = (self.equity_usd * 1.5) / self.max_pos 
+        therisk = (self.equity_usd) / self.max_pos 
         
         if therisk < 0:
             therisk = therisk * -1
@@ -770,7 +770,7 @@ class MarketMaker( object ):
             print('oldp: ' + str(oldp))
             therisk = therisk - oldp
             abc = abc + 1
-        therisk = therisk * 1.5        
+        therisk = therisk * 1.2     
         if therisk > 0:        
             for e in exps:
                 #z = z + 1
@@ -826,10 +826,10 @@ class MarketMaker( object ):
                         p1 = black_scholes(spot, p, diff, pivs[p], 0.03, 0.0, -1) 
                         c1 = black_scholes(spot, c, diff, civs[c], 0.03, 0.0, 1) 
                         
-                        c2 = black_scholes(spot * 1.1, p, diff, pivs[p], 0.03, 0.0, -1) 
-                        p2 = black_scholes(spot * 1.1, c, diff, civs[c], 0.03, 0.0, 1) 
-                        c3 = black_scholes(spot * 0.9, p, diff, pivs[p], 0.03, 0.0, -1) 
-                        p3 = black_scholes(spot * 0.9, c, diff, civs[c], 0.03, 0.0, 1) 
+                        c2 = black_scholes(spot * 1.2, p, diff, pivs[p], 0.03, 0.0, -1) 
+                        p2 = black_scholes(spot * 1.2, c, diff, civs[c], 0.03, 0.0, 1) 
+                        c3 = black_scholes(spot * 0.8, p, diff, pivs[p], 0.03, 0.0, -1) 
+                        p3 = black_scholes(spot * 0.8, c, diff, civs[c], 0.03, 0.0, 1) 
                         cost1 =(c1 + p1)
                         cost2 = (c2 + p2)
                         cost3 = (c3 + p3)
