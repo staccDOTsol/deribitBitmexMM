@@ -61,12 +61,12 @@ EWMA_WGT_LOOPTIME   = .6      # parameter for EWMA looptime estimate
 FORECAST_RETURN_CAP = 20        # cap on returns for vol estimate
 LOG_LEVEL           = logging.INFO
 MIN_ORDER_SIZE      = 1
-MAX_LAYERS          =  3        # max orders to layer the ob with on each side
+MAX_LAYERS          =  6        # max orders to layer the ob with on each side
 MKT_IMPACT          =  0      # base 1-sided spread between bid/offer
 NLAGS               =  2        # number of lags in time series
 PCT                 = 100 * BP  # one percentage point
-PCT_LIM_LONG        = 800       # % position limit long
-PCT_LIM_SHORT       = 1600       # % position limit short
+PCT_LIM_LONG        = 200       # % position limit long
+PCT_LIM_SHORT       = 400      # % position limit short
 PCT_QTY_BASE        = 1000       # pct order qty in bps as pct of acct on each order
 MIN_LOOP_TIME       =   0.1       # Minimum time between loops
 RISK_CHARGE_VOL     =   7.5   # vol risk charge in bps per 100 vol
@@ -101,6 +101,7 @@ class MarketMaker( object ):
         self.volatility = 0
         self.price = 0
         self.directional = 0
+        self.drsi = None
         self.mean_looptime      = 1
         self.monitor            = monitor
         self.output             = output or monitor
@@ -116,7 +117,34 @@ class MarketMaker( object ):
         
     
     def get_bbo( self, contract ): # Get best b/o excluding own orders
+        if self.directional == 1:
+            ohlcv = requests.get('https://www.deribit.com/api/v2/public/get_tradingview_chart_data?instrument_name=BTC-PERPETUAL&start_timestamp=' + str(int(time.time()) * 1000 - 1000 * 60 * 60) + '&end_timestamp=' + str(int(time.time())* 1000) + '&resolution=1')
+            j = ohlcv.json()
+            o = []
+            h = []
+            l = []
+            c = []
+            v = []
+            for b in j['result']['open']:
+                o.append( b )
         
+            for b in j['result']['high']:
+                h.append(b)
+            for b in j['result']['low']:
+                l.append(b)
+            for b in j['result']['close']:
+                c.append(b)
+            for b in j['result']['volume']:
+                v.append(b)
+            abc = 0
+            ohlcv2 = []
+            for b in j['result']['open']:
+                ohlcv2.append([o[abc], h[abc], l[abc], c[abc], v[abc]])
+                abc = abc + 1
+        
+            ddf = pd.DataFrame(ohlcv2, columns=['open', 'high', 'low', 'close', 'volume'])
+            self.dsrsi = TA.STOCHRSI(ddf).iloc[-1] * 100
+            #print(self.dsrsi)
         # Get orderbook
         if self.price == 0:
             ob      = self.client.getorderbook( contract )
@@ -182,6 +210,8 @@ class MarketMaker( object ):
             ask = ticksize_ceil( dvwap.iloc[-1], tsz )
             print( { 'bid': bid, 'ask': ask })
             return { 'bid': bid, 'ask': ask }
+        
+
     def get_futures( self ): # Get all current futures instruments
         
         self.futures_prv    = cp.deepcopy( self.futures )
@@ -307,7 +337,11 @@ class MarketMaker( object ):
             
             place_bids = nbids > 0
             place_asks = nasks > 0
-            
+            #buy bid sell ask
+            if self.drsi > 80: #over
+                place_bids = 0
+            if self.drsi < 20: #under
+                place_asks = 0
             if not place_bids and not place_asks:
                 print( 'No bid no offer for %s' % fut, min_order_size_btc )
                 continue
@@ -465,6 +499,7 @@ class MarketMaker( object ):
             self.get_futures()
             # Directional
             # 0: none
+            # 1: StochRSI
             #
             # Price
             # 0: none
@@ -475,7 +510,7 @@ class MarketMaker( object ):
             # 1: ewma
             with open('deribit-settings.json', 'r') as read_file:
                 data = json.load(read_file)
-                self.direcitonal = data['directional']
+                self.directional = data['directional']
                 self.price = data['price']
                 self.volatility = data['volatility']
 

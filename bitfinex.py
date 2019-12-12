@@ -61,8 +61,8 @@ MKT_IMPACT          =  0      # base 1-sided spread between bid/offer
 NLAGS               =  2        # number of lags in time series
 PCT                 = 100 * BP  # one percentage point
 PCT_LIM_LONG        = 1000      # % position limit long
-PCT_LIM_SHORT       = 2000       # % position limit short
-PCT_QTY_BASE        = 1000       # pct order qty in bps as pct of acct on each order
+PCT_LIM_SHORT       = 1000       # % position limit short
+PCT_QTY_BASE        = 113513.5135135       # pct order qty in bps as pct of acct on each order
 MIN_LOOP_TIME       =   0.1       # Minimum time between loops
 RISK_CHARGE_VOL     =   7.5   # vol risk charge in bps per 100 vol
 SECONDS_IN_DAY      = 3600 * 24
@@ -151,9 +151,12 @@ class MarketMaker( object ):
 
         print('markets')
         insts               = self.client.fetchMarkets()
+        for i in insts:
+            if i['info']['margin'] == True:
+                print (i['symbol'])
         #print(insts[0])
         self.futures        = sort_by_key( { 
-            i[ 'symbol' ]: i for i in insts if 'BTCF0/USTF0' in i['symbol'] or 'ETHF0/USTF0' in i['symbol']     } )
+            i[ 'symbol' ]: i for i in insts if 'BTC/USDT' in i['symbol'] } )# or 'ETHF0/USTF0' in i['symbol']     } )
         #print(self.futures['XBTH20'])
         for k in self.futures.keys():
             self.futures[k][ 'expi_dt' ] = datetime.strptime( 
@@ -177,7 +180,7 @@ class MarketMaker( object ):
 
     def get_spot( self ):
         print('ticker')
-        return self.client.fetchTicker('BTCF0/USTF0')['last']
+        return self.client.fetchTicker('BTC/USDT')['last']
 
     
     def get_precision( self, contract ):
@@ -297,7 +300,7 @@ class MarketMaker( object ):
             place_asks = nasks > 0
             
             if not place_bids and not place_asks:
-                print( 'No bid no offer for %s' % fut, min_order_size_btc )
+                print( 'No bid no offer for %s' % fut, qtybtc )
                 continue
                 
             tsz = float(self.get_ticksize( fut ))            
@@ -428,7 +431,7 @@ class MarketMaker( object ):
            # print(order)
             try:
                 print('cancelorder')
-                self.client.cancelOrder( oid , 'BTCF0/USTF0' )
+                self.client.cancelOrder( oid , 'BTC/USDT' )
             except Exception as e:
                 print(e)
     def restart( self ):        
@@ -540,7 +543,7 @@ class MarketMaker( object ):
         #print(account)
         spot    = self.get_spot()
         for  acc in account:
-            if acc['currency'] == 'ustf0':
+            if acc['currency'] == 'ust':
                   val = float(acc['amount']) / spot
         #print(account)  
         self.equity_btc = val
@@ -627,9 +630,7 @@ class MarketMaker( object ):
             
             self.vols[ s ] = math.sqrt( v )
                             
-        with open('bitfinex.json', 'w') as f:
-            dictionaries = self.vols
-            f.write(json.dumps(dictionaries))
+
 if __name__ == '__main__':
     
     try:
