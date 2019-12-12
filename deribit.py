@@ -101,7 +101,7 @@ class MarketMaker( object ):
         self.volatility = 0
         self.price = 0
         self.directional = 0
-        self.drsi = None
+        self.dsrsi = 50
         self.mean_looptime      = 1
         self.monitor            = monitor
         self.output             = output or monitor
@@ -338,9 +338,9 @@ class MarketMaker( object ):
             place_bids = nbids > 0
             place_asks = nasks > 0
             #buy bid sell ask
-            if self.drsi > 80: #over
+            if self.dsrsi > 80: #over
                 place_bids = 0
-            if self.drsi < 20: #under
+            if self.dsrsi < 20: #under
                 place_asks = 0
             if not place_bids and not place_asks:
                 print( 'No bid no offer for %s' % fut, min_order_size_btc )
