@@ -46,10 +46,10 @@ parser.add_argument( '--no-restart',
                      action = 'store_false' )
 
 args    = parser.parse_args()
-URL     = 'https://test.deribit.com'
+URL     = 'https://www.deribit.com'
 
-KEY     = 'pUcNWyjC'
-SECRET  = 'iQaAEpwYEOnS-aJm7vlusoDDwYry00thwywe1mwDfZU'
+KEY     = 'Wb6ETOV6'
+SECRET  = 'F743ZYWv7tDMMcd6Qov-TVRKXycYROXnOLP8Z2c-IDM'
 
 BP                  = 1e-4      # one basis point
 BTC_SYMBOL          = 'btc'
@@ -118,7 +118,7 @@ class MarketMaker( object ):
     
     def get_bbo( self, contract ): # Get best b/o excluding own orders
         if self.directional == 1:
-            ohlcv = requests.get('https://www.deribit.com/api/v2/public/get_tradingview_chart_data?instrument_name=BTC-PERPETUAL&start_timestamp=' + str(int(time.time()) * 1000 - 1000 * 60 * 60) + '&end_timestamp=' + str(int(time.time())* 1000) + '&resolution=1')
+            ohlcv = requests.get('https://www.deribit.com/api/v2/public/get_tradingview_chart_data?instrument_name=' + contract + '&start_timestamp=' + str(int(time.time()) * 1000 - 1000 * 60 * 60) + '&end_timestamp=' + str(int(time.time())* 1000) + '&resolution=1')
             j = ohlcv.json()
             o = []
             h = []
@@ -179,7 +179,7 @@ class MarketMaker( object ):
             
             return { 'bid': best_bid, 'ask': best_ask }
         elif self.price == 1:
-            ohlcv = requests.get('https://www.deribit.com/api/v2/public/get_tradingview_chart_data?instrument_name=BTC-PERPETUAL&start_timestamp=' + str(int(time.time()) * 1000 - 1000 * 60 * 60) + '&end_timestamp=' + str(int(time.time())* 1000) + '&resolution=1')
+            ohlcv = requests.get('https://www.deribit.com/api/v2/public/get_tradingview_chart_data?instrument_name=' + contract + '&start_timestamp=' + str(int(time.time()) * 1000 - 1000 * 60 * 60) + '&end_timestamp=' + str(int(time.time())* 1000) + '&resolution=1')
             j = ohlcv.json()
             o = []
             h = []
@@ -217,7 +217,7 @@ class MarketMaker( object ):
         self.futures_prv    = cp.deepcopy( self.futures )
         insts               = self.client.getinstruments()
         self.futures        = sort_by_key( { 
-            i[ 'instrumentName' ]: i for i in insts  if i['instrumentName'] == 'BTC-PERPETUAL'#if i[ 'kind' ] == 'future'
+            i[ 'instrumentName' ]: i for i in insts  if 'BTC-' in i['instrumentName'] and i[ 'kind' ] == 'future'
         } )
         
         for k, v in self.futures.items():

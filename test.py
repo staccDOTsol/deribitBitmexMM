@@ -17,7 +17,8 @@ while True:
 	tty = datetime(2019,12,27).strftime('%s')
 
 	theyield = 0.1541
-	therisk = 15000
+    
+	therisk = ((10) * (400 / 100) * 10 ) / 1
 
 	spot = client.index()[ 'btc' ]
 
@@ -154,9 +155,11 @@ while True:
 	smallest = 9999999999999999
 	for c in costed:
 		#print(costed[c])
+		print(str(costed[c]))
 		if float(costed[c]) < smallest:
-			smallest = float(costed[c])
-			w1 = c
+			if float(costed[c])  < 0.01:
+				smallest = float(costed[c])
+				w1 = c
 	print(' ')
 	print('exposure: ' + str(therisk))
 	print('cost to buy: ' + str(smallest))
