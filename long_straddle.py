@@ -5,9 +5,9 @@ from datetime import datetime
 #   >>> black_scholes(7598.45, 7000, 0.09587902546296297, 0.679, 0.03, 0.0, -1)
 #   >>> black_scholes(7598.45, 9000, 0.09587902546296297, 0.675, 0.03, 0.0, 1)
 from deribit_api    import RestClient
-KEY     = 'Wb6ETOV6' #
-SECRET  = 'F743ZYWv7tDMMcd6Qov-TVRKXycYROXnOLP8Z2c-IDM'
-client = RestClient( KEY, SECRET, 'https://www.deribit.com' )
+KEY     = 'zq_2PeNx' #
+SECRET  = '0Rtx6PQHWuqQbn9bYuS9-6N0vYcz6_5asLNtm4jBvZY'
+client = RestClient( KEY, SECRET, 'https://test.deribit.com' )
 import math
 from utils          import ( get_logger, lag, print_dict, print_dict_of_dicts, sort_by_key,
                              ticksize_ceil, ticksize_floor, ticksize_round )
@@ -19,7 +19,7 @@ while True:
         client.cancelall()
     puts = []
     calls = [] #order size * (higher of pct lim long/short * num fut) * 10 / lev
-    therisk = ((20) * ((200 * 3) / 100) * 10 ) * 1
+    therisk = ((250) * ((50 * 3)/100)* 10) * 1
     
     if therisk < 0:
         therisk = therisk * -1
@@ -28,8 +28,8 @@ while True:
     theyield = 0.1541
     amts = {}
     spot = client.index()[ 'btc' ]
-    lower = math.floor((spot - 1000) / 1000) * 1000
-    higher = math.ceil((spot + 1000 ) / 1000) * 1000
+    lower = math.floor((spot - 5000) / 1000) * 1000
+    higher = math.ceil((spot + 5000 ) / 1000) * 1000
     insts               = client.getinstruments()
     options        = sort_by_key( { 
         i[ 'instrumentName' ]: i for i in insts  if i[ 'kind' ] == 'option' and 'BTC' in i['instrumentName']
@@ -110,33 +110,25 @@ while True:
                 if remember[bid['instrument']] not in puts:
                     puts.append(remember[bid['instrument']])
                     amts[bid['instrument']] = bid['size']
-                else:
-                    amts[bid['instrument']] = amts[bid['instrument']] + bid['size']
             bid_ords    = [ o for o in positions if remember[options[option]['instrumentName']]['optionType'] == 'call' and options[option]['instrumentName'] == o['instrument']  ]
             for bid in bid_ords:
                 if remember[bid['instrument']] not in calls:
                     calls.append(remember[bid['instrument']])
                     amts[bid['instrument']] = bid['size']
-                else:
-                    amts[bid['instrument']] = amts[bid['instrument']] + bid['size']
-        
+               
         for option in options:
             bid_ords    = [ o for o in ords if remember[options[option]['instrumentName']]['optionType'] == 'put' and options[option]['instrumentName'] == o['instrument']  ]
             for bid in bid_ords:
                 if remember[bid['instrument']] not in puts:
                     puts.append(remember[bid['instrument']])
                     amts[bid['instrument']] = bid['quantity']
-                else:
-                    amts[bid['instrument']] = amts[bid['instrument']] + bid['quantity']
-
+                
             bid_ords    = [ o for o in ords if remember[options[option]['instrumentName']]['optionType'] == 'call' and options[option]['instrumentName'] == o['instrument']  ]
             for bid in bid_ords:
                 if remember[bid['instrument']] not in calls:
                     calls.append(remember[bid['instrument']])
                     amts[bid['instrument']] = bid['quantity']
-                else:
-                    amts[bid['instrument']] = amts[bid['instrument']] + bid['quantity']
-
+                
     strikec = []
     strikep = []
     pexps = []
@@ -159,20 +151,22 @@ while True:
         p1 = black_scholes(spot, strikep[abc], diff, ivs[puts[abc]['instrumentName']], 0.03, 0.0, -1) 
         c1 = black_scholes(spot, strikec[abc], diff, ivs[calls[abc]['instrumentName']], 0.03, 0.0, 1) 
         
-        c2 = black_scholes(spot * 1.06, strikep[abc], diff, ivs[puts[abc]['instrumentName']], 0.03, 0.0, -1) 
-        p2 = black_scholes(spot * 1.06, strikec[abc], diff, ivs[calls[abc]['instrumentName']], 0.03, 0.0, 1) 
-        c3 = black_scholes(spot * 0.94, strikep[abc], diff, ivs[puts[abc]['instrumentName']], 0.03, 0.0, -1) 
-        p3 = black_scholes(spot * 0.94, strikec[abc], diff, ivs[calls[abc]['instrumentName']], 0.03, 0.0, 1) 
+        c2 = black_scholes(spot * 1.11, strikep[abc], diff, ivs[puts[abc]['instrumentName']], 0.03, 0.0, -1) 
+        p2 = black_scholes(spot * 1.11, strikec[abc], diff, ivs[calls[abc]['instrumentName']], 0.03, 0.0, 1) 
+        c3 = black_scholes(spot * 0.89, strikep[abc], diff, ivs[puts[abc]['instrumentName']], 0.03, 0.0, -1) 
+        p3 = black_scholes(spot * 0.89, strikec[abc], diff, ivs[calls[abc]['instrumentName']], 0.03, 0.0, 1) 
         cost1 =(c1 + p1)
         cost2 = (c2 + p2)
         cost3 = (c3 + p3)
-        profit=(cost2-cost1)+(cost3-cost1)  
-        oldp = oldp  + profit * amts[calls[abc]['instrumentName']]
+        profit=(cost2-cost1)+(cost3-cost1)
+        print(amts[calls[abc]['instrumentName']])  
+        oldp = oldp  + spot * (has[calls[abc]['instrumentName']] * amts[calls[abc]['instrumentName']])
+        #btccost / price * theprofit))
         print('therisk: ' + str(therisk))
         print('oldp: ' + str(oldp))
         therisk = therisk - oldp
         abc = abc + 1
-    therisk = therisk * 1.2    
+    #therisk = therisk * 1.75    
 
     if therisk > 0 and therisk > 200:        
         for e in exps:
@@ -229,10 +223,10 @@ while True:
                     p1 = black_scholes(spot, p, diff, pivs[p], 0.03, 0.0, -1) 
                     c1 = black_scholes(spot, c, diff, civs[c], 0.03, 0.0, 1) 
                     
-                    c2 = black_scholes(spot * 1.15, p, diff, pivs[p], 0.03, 0.0, -1) 
-                    p2 = black_scholes(spot * 1.15, c, diff, civs[c], 0.03, 0.0, 1) 
-                    c3 = black_scholes(spot * (1-0.15), p, diff, pivs[p], 0.03, 0.0, -1) 
-                    p3 = black_scholes(spot * (1-0.15), c, diff, civs[c], 0.03, 0.0, 1) 
+                    c2 = black_scholes(spot * 1.11, p, diff, pivs[p], 0.03, 0.0, -1) 
+                    p2 = black_scholes(spot * 1.11, c, diff, civs[c], 0.03, 0.0, 1) 
+                    c3 = black_scholes(spot * (1-0.11), p, diff, pivs[p], 0.03, 0.0, -1) 
+                    p3 = black_scholes(spot * (1-0.11), c, diff, civs[c], 0.03, 0.0, 1) 
                     cost1 =(c1 + p1)
                     cost2 = (c2 + p2)
                     cost3 = (c3 + p3)

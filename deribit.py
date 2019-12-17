@@ -46,10 +46,10 @@ parser.add_argument( '--no-restart',
                      action = 'store_false' )
 
 args    = parser.parse_args()
-URL     = 'https://www.deribit.com'
+URL     = 'https://www.deribit.com'#ctrl+h!!!!!
 
-KEY     = 'Wb6ETOV6'
-SECRET  = 'F743ZYWv7tDMMcd6Qov-TVRKXycYROXnOLP8Z2c-IDM'
+KEY     = 'ahlhmWhF'
+SECRET  = '3yzGBj0ae79G0O3iHfNEaucqnX-qUKAtkf3l_H3Qzsg'
 
 BP                  = 1e-4      # one basis point
 BTC_SYMBOL          = 'btc'
@@ -61,13 +61,13 @@ EWMA_WGT_LOOPTIME   = .6      # parameter for EWMA looptime estimate
 FORECAST_RETURN_CAP = 20        # cap on returns for vol estimate
 LOG_LEVEL           = logging.INFO
 MIN_ORDER_SIZE      = 1
-MAX_LAYERS          =  6        # max orders to layer the ob with on each side
+MAX_LAYERS          =  6       # max orders to layer the ob with on each side
 MKT_IMPACT          =  0      # base 1-sided spread between bid/offer
-NLAGS               =  2        # number of lags in time series
+NLAGS               =  8        # number of lags in time series
 PCT                 = 100 * BP  # one percentage point
-PCT_LIM_LONG        = 200       # % position limit long
-PCT_LIM_SHORT       = 400      # % position limit short
-PCT_QTY_BASE        = 1000       # pct order qty in bps as pct of acct on each order
+PCT_LIM_LONG        = 1000       # % position limit long
+PCT_LIM_SHORT       = 500    # % position limit short
+PCT_QTY_BASE        = 200     # pct order qty in bps as pct of acct on each order
 MIN_LOOP_TIME       =   0.1       # Minimum time between loops
 RISK_CHARGE_VOL     =   7.5   # vol risk charge in bps per 100 vol
 SECONDS_IN_DAY      = 3600 * 24
@@ -120,6 +120,7 @@ class MarketMaker( object ):
         if self.directional == 1:
             ohlcv = requests.get('https://www.deribit.com/api/v2/public/get_tradingview_chart_data?instrument_name=' + contract + '&start_timestamp=' + str(int(time.time()) * 1000 - 1000 * 60 * 60) + '&end_timestamp=' + str(int(time.time())* 1000) + '&resolution=1')
             j = ohlcv.json()
+            print(contract)
             o = []
             h = []
             l = []
@@ -143,7 +144,10 @@ class MarketMaker( object ):
                 abc = abc + 1
         
             ddf = pd.DataFrame(ohlcv2, columns=['open', 'high', 'low', 'close', 'volume'])
-            self.dsrsi = TA.STOCHRSI(ddf).iloc[-1] * 100
+            try:
+                self.dsrsi = TA.STOCHRSI(ddf).iloc[-1] * 100
+            except: 
+                self.dsrsi = 50           
             #print(self.dsrsi)
         # Get orderbook
         if self.price == 0:
@@ -205,9 +209,14 @@ class MarketMaker( object ):
         
             ddf = pd.DataFrame(ohlcv2, columns=['open', 'high', 'low', 'close', 'volume'])
             dvwap = TA.VWAP(ddf)
-            tsz = self.get_ticksize( 'BTC-PERPETUAL' )    
-            bid = ticksize_floor( dvwap.iloc[-1], tsz )
-            ask = ticksize_ceil( dvwap.iloc[-1], tsz )
+            tsz = self.get_ticksize( contract ) 
+            try:   
+                bid = ticksize_floor( dvwap.iloc[-1], tsz )
+                ask = ticksize_ceil( dvwap.iloc[-1], tsz )
+            except:
+                bid = ticksize_floor( self.get_spot(), tsz )
+                ask = ticksize_ceil( self.get_spot(), tsz )
+           
             print( { 'bid': bid, 'ask': ask })
             return { 'bid': bid, 'ask': ask }
         
@@ -217,7 +226,7 @@ class MarketMaker( object ):
         self.futures_prv    = cp.deepcopy( self.futures )
         insts               = self.client.getinstruments()
         self.futures        = sort_by_key( { 
-            i[ 'instrumentName' ]: i for i in insts  if 'BTC-' in i['instrumentName'] and i[ 'kind' ] == 'future'
+            i[ 'instrumentName' ]: i for i in insts  if ('BTC-' in i['instrumentName'] )and i[ 'kind' ] == 'future'# or 'ETH-' in  i['instrumentName'] ) 
         } )
         
         for k, v in self.futures.items():
@@ -354,7 +363,6 @@ class MarketMaker( object ):
             elif self.volatility == 0:
                 eps = BP * 0.5 * RISK_CHARGE_VOL
             riskfac     = math.exp( eps )
-
             bbo     = self.get_bbo( fut )
             bid_mkt = bbo[ 'bid' ]
             ask_mkt = bbo[ 'ask' ]
@@ -392,9 +400,9 @@ class MarketMaker( object ):
                     else:
                         prc = bids[ 0 ]
 
-                    qty = round( prc * qtybtc / con_sz )                        
+                    qty = round( prc * qtybtc / (con_sz / 1) )                        
                     if 'ETH' in fut:
-                        qty = round( prc * 450 * qtybtc / con_sz )            
+                        qty = round( prc * 450 * qtybtc / (con_sz / 1) )            
                     if i < len_bid_ords:    
 
                         oid = bid_ords[ i ][ 'orderId' ]
@@ -430,9 +438,9 @@ class MarketMaker( object ):
                     else:
                         prc = asks[ 0 ]
                         
-                    qty = round( prc * qtybtc / con_sz )
+                    qty = round( prc * qtybtc / (con_sz / 1) )
                     if 'ETH' in fut:
-                        qty = round( prc * 450 * qtybtc / con_sz )    
+                        qty = round( prc * 450 * qtybtc / (con_sz / 1) )    
                     if i < len_ask_ords:
                         oid = ask_ords[ i ][ 'orderId' ]
                         try:
@@ -633,11 +641,38 @@ class MarketMaker( object ):
         spot                    = self.get_spot()
         self.ts[ 0 ][ BTC_SYMBOL ]    = spot
         
-        for c in self.futures.keys():
+        for contract in self.futures.keys():
+            ob      = self.client.getorderbook( contract )
+            bids    = ob[ 'bids' ]
+            asks    = ob[ 'asks' ]
             
-            bbo = self.get_bbo( c )
-            bid = bbo[ 'bid' ]
-            ask = bbo[ 'ask' ]
+            ords        = self.client.getopenorders( contract )
+            bid_ords    = [ o for o in ords if o[ 'direction' ] == 'buy'  ]
+            ask_ords    = [ o for o in ords if o[ 'direction' ] == 'sell' ]
+            best_bid    = None
+            best_ask    = None
+
+            err = 10 ** -( self.get_precision( contract ) + 1 )
+            
+            for b in bids:
+                match_qty   = sum( [ 
+                    o[ 'quantity' ] for o in bid_ords 
+                    if math.fabs( b[ 'price' ] - o[ 'price' ] ) < err
+                ] )
+                if match_qty < b[ 'quantity' ]:
+                    best_bid = b[ 'price' ]
+                    break
+            
+            for a in asks:
+                match_qty   = sum( [ 
+                    o[ 'quantity' ] for o in ask_ords 
+                    if math.fabs( a[ 'price' ] - o[ 'price' ] ) < err
+                ] )
+                if match_qty < a[ 'quantity' ]:
+                    best_ask = a[ 'price' ]
+                    break
+            bid = best_bid
+            ask = best_ask
 
             if not bid is None and not ask is None:
                 mid = 0.5 * ( bbo[ 'bid' ] + bbo[ 'ask' ] )
@@ -682,18 +717,6 @@ class MarketMaker( object ):
             v   = w * v + ( 1 - w ) * self.vols[ s ] ** 2
             self.vols[ s ] = math.sqrt( v )
                             
-        with open('deribit.json', 'w') as f:
-            dictionaries = self.vols
-            f.write(json.dumps(dictionaries))
-        with open('bitmex.json', 'r') as read_file:
-            loaded_dictionaries = json.loads(read_file.read())
-            loaded_dictionaries['BTC-PERPETUAL'] = loaded_dictionaries['XBTUSD']
-            #loaded_dictionaries['ETH-PERPETUAL'] = loaded_dictionaries['ETHUSD']
-            #loaded_dictionaries['BTC-27DEC19'] = loaded_dictionaries['XBTZ19']
-            #loaded_dictionaries['BTC-27MAR20'] = loaded_dictionaries['XBTH20']
-            for s in self.vols.keys():
-                if s in loaded_dictionaries:
-                    self.vols[s] = self.vols[s] / 2 + loaded_dictionaries[s] / 2
 
 if __name__ == '__main__':
     

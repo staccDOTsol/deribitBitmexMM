@@ -3,13 +3,13 @@ import time
 from datetime import datetime
 #   >>> black_scholes(7598.45, 7000, 0.09587902546296297, 0.679, 0.03, 0.0, -1)
 #   >>> black_scholes(7598.45, 9000, 0.09587902546296297, 0.675, 0.03, 0.0, 1)
-from deribit_api    import RestClient
+from deribit_api	import RestClient
 import math
-from utils          import ( get_logger, lag, print_dict, print_dict_of_dicts, sort_by_key,
-                             ticksize_ceil, ticksize_floor, ticksize_round )
-URL     = 'https://www.deribit.com'
+from utils		  import ( get_logger, lag, print_dict, print_dict_of_dicts, sort_by_key,
+							 ticksize_ceil, ticksize_floor, ticksize_round )
+URL	 = 'https://www.deribit.com'
 
-KEY     = 'Wb6ETOV6'
+KEY	 = 'Wb6ETOV6'
 SECRET  = 'F743ZYWv7tDMMcd6Qov-TVRKXycYROXnOLP8Z2c-IDM'
 client = RestClient( KEY, SECRET, URL )
 while True:
@@ -17,14 +17,15 @@ while True:
 	tty = datetime(2019,12,27).strftime('%s')
 
 	theyield = 0.1541
-    
-	therisk = ((10) * (400 / 100) * 10 ) / 1
+	therisk = ((10) * ((1200 * 3)/100)* 10) * 1
+	
+	
 
 	spot = client.index()[ 'btc' ]
 
-	insts               = client.getinstruments()
-	options        = sort_by_key( { 
-	    i[ 'instrumentName' ]: i for i in insts  if i[ 'kind' ] == 'option' and 'BTC' in i['instrumentName']
+	insts			   = client.getinstruments()
+	options		= sort_by_key( { 
+		i[ 'instrumentName' ]: i for i in insts  if i[ 'kind' ] == 'option' and 'BTC' in i['instrumentName']
 	} )
 	exps = []
 	strikes = []
@@ -129,12 +130,17 @@ while True:
 				if p1 > costp[pcount] * spot:
 					print('p1 underpriced!')
 					print(p1)
+				
+
 					print ( {'price': costp[pcount], 'call s' : c, 'put s': p, 'instrument': instsp[pcount], 'e': e})
 				
-				c2 = black_scholes(spot * 1.15, p, diff, pivs[p], 0.03, 0.0, -1) 
-				p2 = black_scholes(spot * 1.15, c, diff, civs[c], 0.03, 0.0, 1) 
-				c3 = black_scholes(spot * 0.85, p, diff, pivs[p], 0.03, 0.0, -1) 
-				p3 = black_scholes(spot * 0.85, c, diff, civs[c], 0.03, 0.0, 1) 
+
+				c2 = black_scholes(spot * 1.01, p, diff, pivs[p], 0.03, 0.0, -1) 
+				p2 = black_scholes(spot * 1.01, c, diff, civs[c], 0.03, 0.0, 1) 
+				c3 = black_scholes(spot * (1-0.01), p, diff, pivs[p], 0.03, 0.0, -1) 
+				p3 = black_scholes(spot * (1-0.01), c, diff, civs[c], 0.03, 0.0, 1) 
+				
+
 				cost1 =(c1 + p1)
 				cost2 = (c2 + p2)
 				cost3 = (c3 + p3)
@@ -157,7 +163,7 @@ while True:
 		#print(costed[c])
 		print(str(costed[c]))
 		if float(costed[c]) < smallest:
-			if float(costed[c])  < 0.01:
+			if float(costed[c])  < 5:
 				smallest = float(costed[c])
 				w1 = c
 	print(' ')
