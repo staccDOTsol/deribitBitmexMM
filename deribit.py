@@ -675,11 +675,11 @@ class MarketMaker( object ):
             ask = best_ask
 
             if not bid is None and not ask is None:
-                mid = 0.5 * ( bbo[ 'bid' ] + bbo[ 'ask' ] )
+                mid = 0.5 * ( bid + ask )
                 
             else:
                 continue
-            self.ts[ 0 ][ c ]               = mid
+            self.ts[ 0 ][ contract ]               = mid
                 
         self.ts[ 0 ][ 'timestamp' ]  = datetime.utcnow()
 
