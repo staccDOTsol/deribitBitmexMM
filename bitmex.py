@@ -64,7 +64,7 @@ EWMA_WGT_COV        = 70         # parameter in % points for EWMA volatility est
 EWMA_WGT_LOOPTIME   = .6      # parameter for EWMA looptime estimate
 FORECAST_RETURN_CAP = 20        # cap on returns for vol estimate
 LOG_LEVEL           = logging.INFO
-MIN_ORDER_SIZE      = 220
+MIN_ORDER_SIZE      = 30
 MAX_LAYERS          =  2       # max orders to layer the ob with on each side
 MKT_IMPACT          =  0      # base 1-sided spread between bid/offer
 NLAGS               =  2        # number of lags in time series
@@ -598,6 +598,8 @@ class MarketMaker( object ):
                     qty = round ( qty * self.buysellsignal)    
                     qty = round (qty * self.multsLong[fut])   
                     qty = round (qty * self.diff)    
+                    if qty < 0:
+                        qty = qty * -1
                     if i < len_bid_ords:    
 
                         oid = bid_ords[ i ]['orderID']
@@ -642,7 +644,9 @@ class MarketMaker( object ):
                         qty = round(qty / 28.3)
                     qty = round ( qty / self.buysellsignal)    
                     qty = round (qty * self.multsShort[fut])   
-                    qty = round (qty * self.diff)      
+                    qty = round (qty * self.diff) 
+                    if qty < 0:
+                        qty = qty * -1     
                     if i < len_ask_ords:
                         oid = ask_ords[ i ]['orderID']
                         #print(oid)
