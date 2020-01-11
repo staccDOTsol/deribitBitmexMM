@@ -64,7 +64,7 @@ EWMA_WGT_COV        = 70         # parameter in % points for EWMA volatility est
 EWMA_WGT_LOOPTIME   = .6      # parameter for EWMA looptime estimate
 FORECAST_RETURN_CAP = 20        # cap on returns for vol estimate
 LOG_LEVEL           = logging.INFO
-MIN_ORDER_SIZE      = 20
+MIN_ORDER_SIZE      = 220
 MAX_LAYERS          =  2       # max orders to layer the ob with on each side
 MKT_IMPACT          =  0      # base 1-sided spread between bid/offer
 NLAGS               =  2        # number of lags in time series
@@ -753,10 +753,10 @@ class MarketMaker( object ):
                 j2 = r[0]['markPrice']
                 diff = j / j2;
                 print(diff)
-                diff = -1 * (1 - diff) * 100
-                print(diff)
                 if diff < 1:
                     diff = 1 / diff
+                diff = -1 * (1 - diff) * 100
+                print(diff)
 
                 diff = diff * INDEX_MOD
                 diff = diff / 100 + 1
