@@ -64,7 +64,7 @@ EWMA_WGT_COV        = 70         # parameter in % points for EWMA volatility est
 EWMA_WGT_LOOPTIME   = .6      # parameter for EWMA looptime estimate
 FORECAST_RETURN_CAP = 20        # cap on returns for vol estimate
 LOG_LEVEL           = logging.INFO
-MIN_ORDER_SIZE      = 215
+MIN_ORDER_SIZE      = 20
 MAX_LAYERS          =  2       # max orders to layer the ob with on each side
 MKT_IMPACT          =  0      # base 1-sided spread between bid/offer
 NLAGS               =  2        # number of lags in time series
@@ -447,25 +447,25 @@ class MarketMaker( object ):
         self.multsLong['XBTM20'] = 1
 
 
-        if self.positions['ETHUSD']['currentQty'] > 0:
-            self.multsShort['ETHUSD'] = (self.positions['ETHUSD']['currentQty'] / MIN_ORDER_SIZE) * POS_MOD
         if self.positions['ETHUSD']['currentQty'] < 0:
+            self.multsShort['ETHUSD'] = (self.positions['ETHUSD']['currentQty'] / MIN_ORDER_SIZE) * POS_MOD
+        if self.positions['ETHUSD']['currentQty'] > 0:
             self.multsLong['ETHUSD'] = (-1 * self.positions['ETHUSD']['currentQty'] / MIN_ORDER_SIZE) * POS_MOD
 
-        if self.positions['XBTUSD']['currentQty'] > 0:
-            self.multsShort['XBTUSD'] = (self.positions['XBTUSD']['currentQty'] / MIN_ORDER_SIZE) * POS_MOD
         if self.positions['XBTUSD']['currentQty'] < 0:
+            self.multsShort['XBTUSD'] = (self.positions['XBTUSD']['currentQty'] / MIN_ORDER_SIZE) * POS_MOD
+        if self.positions['XBTUSD']['currentQty'] > 0:
             self.multsLong['XBTUSD'] = (-1 * self.positions['XBTUSD']['currentQty'] / MIN_ORDER_SIZE) * POS_MOD
 
 
-        if self.positions['XBTH20']['currentQty'] > 0:
-            self.multsShort['XBTH20'] = (self.positions['XBTH20']['currentQty'] / MIN_ORDER_SIZE) * POS_MOD
         if self.positions['XBTH20']['currentQty'] < 0:
+            self.multsShort['XBTH20'] = (self.positions['XBTH20']['currentQty'] / MIN_ORDER_SIZE) * POS_MOD
+        if self.positions['XBTH20']['currentQty'] > 0:
             self.multsLong['XBTH20'] = (-1 * self.positions['XBTH20']['currentQty'] / MIN_ORDER_SIZE) * POS_MOD
 
-        if self.positions['XBTM20']['currentQty'] > 0:
-            self.multsShort['XBTM20'] = (self.positions['XBTM20']['currentQty'] / MIN_ORDER_SIZE) * POS_MOD
         if self.positions['XBTM20']['currentQty'] < 0:
+            self.multsShort['XBTM20'] = (self.positions['XBTM20']['currentQty'] / MIN_ORDER_SIZE) * POS_MOD
+        if self.positions['XBTM20']['currentQty'] > 0:
             self.multsLong['XBTM20'] = (-1 * self.positions['XBTM20']['currentQty'] / MIN_ORDER_SIZE) * POS_MOD
 
 
@@ -570,7 +570,7 @@ class MarketMaker( object ):
                 len_bid_ords    = min( len( bid_ords ), nbids )
                 bid0            = mid_mkt * math.exp( -MKT_IMPACT )
                 
-                bids    = [ bid0 * self.diff * riskfac ** -i for i in range( 1, nbids + 1 ) ]
+                bids    = [ bid0 * riskfac ** -i for i in range( 1, nbids + 1 ) ]
 
                 bids[ 0 ]   = ticksize_floor( bids[ 0 ], tsz )
                 
@@ -580,7 +580,7 @@ class MarketMaker( object ):
                 len_ask_ords    = min( len( ask_ords ), nasks )
                 ask0            = mid_mkt * math.exp(  MKT_IMPACT )
                 
-                asks    = [ ask0 * self.diff * riskfac ** i for i in range( 1, nasks + 1 ) ]
+                asks    = [ ask0 * riskfac ** i for i in range( 1, nasks + 1 ) ]
                 
                 asks[ 0 ]   = ticksize_ceil( asks[ 0 ], tsz  )
             for i in range( max( nbids, nasks )):
@@ -752,10 +752,15 @@ class MarketMaker( object ):
 
                 j2 = r[0]['markPrice']
                 diff = j / j2;
+                print(diff)
                 diff = -1 * (1 - diff) * 100
+                print(diff)
                 if diff < 1:
                     diff = 1 / diff
-                self.diff = diff * INDEX_MOD
+
+                diff = diff * INDEX_MOD
+                diff = diff / 100 + 1
+                self.diff = diff
                 print(self.diff)
     
             self.place_orders()
