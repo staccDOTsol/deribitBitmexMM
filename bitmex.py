@@ -82,6 +82,7 @@ WAVELEN_TS          = 15        # time in seconds between time series update
 VOL_PRIOR           = 150       # vol estimation starting level in percentage pts
 INDEX_MOD = 0.5
 POS_MOD = 0.5
+PRICE_MOD = 0.05
 
 EWMA_WGT_COV        *= PCT
 MKT_IMPACT          *= BP
@@ -261,18 +262,18 @@ class MarketMaker( object ):
             self.buysellsignal = 1
             try:
                 if(dppo.iloc[-1].PPO > 0):
-                    self.buysellsignal = self.buysellsignal * 1.2
+                    self.buysellsignal = self.buysellsignal * (1+PRICE_MOD)
                 else:
-                    self.buysellsignal = self.buysellsignal * 0.8
+                    self.buysellsignal = self.buysellsignal * (1-PRICE_MOD)
 
                 if(dppo.iloc[-1].HISTO > 0):
-                    self.buysellsignal = self.buysellsignal* 1.2
+                    self.buysellsignal = self.buysellsignal* (1+PRICE_MOD)
                 else:
-                    self.buysellsignal = self.buysellsignal * 0.8
+                    self.buysellsignal = self.buysellsignal * (1-PRICE_MOD)
                 if(dppo.iloc[-1].SIGNAL > 0):
-                    self.buysellsignal = self.buysellsignal * 1.2
+                    self.buysellsignal = self.buysellsignal * (1+PRICE_MOD)
                 else:
-                    self.buysellsignal = self.buysellsignal * 0.8
+                    self.buysellsignal = self.buysellsignal * (1-PRICE_MOD)
             except:
                 self.buysellsignal = 1
             
