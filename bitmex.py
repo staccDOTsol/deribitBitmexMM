@@ -558,7 +558,7 @@ class MarketMaker( object ):
                         qty = round(qty / 28.3)
                     qty = round ( qty * self.buysellsignal)    
                     qty = round (qty * self.multsLong[fut])   
-                    qty = round (qty * self.diff)    
+                    qty = round (qty / self.diff)    
                     if qty < 0:
                         qty = qty * -1
                     if i < len_bid_ords:    
@@ -605,7 +605,7 @@ class MarketMaker( object ):
                         qty = round(qty / 28.3)
                     qty = round ( qty / self.buysellsignal)    
                     qty = round (qty * self.multsShort[fut])   
-                    qty = round (qty * self.diff) 
+                    qty = round (qty / self.diff) 
                     if qty < 0:
                         qty = qty * -1     
                     if i < len_ask_ords:
