@@ -511,6 +511,7 @@ class MarketMaker( object ):
                 eps         = BP * vol * RISK_CHARGE_VOL
             elif self.volatility == 0:
                 eps = BP * 0.5 * RISK_CHARGE_VOL
+            eps = eps * self.diff
             riskfac     = math.exp( eps )
             bbo     = self.get_bbo( fut )
             bid_mkt = bbo[ 'bid' ]
