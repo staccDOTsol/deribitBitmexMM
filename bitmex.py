@@ -64,7 +64,7 @@ EWMA_WGT_COV        = 70         # parameter in % points for EWMA volatility est
 EWMA_WGT_LOOPTIME   = .6      # parameter for EWMA looptime estimate
 FORECAST_RETURN_CAP = 20        # cap on returns for vol estimate
 LOG_LEVEL           = logging.INFO
-MIN_ORDER_SIZE      = 30
+MIN_ORDER_SIZE      = 100
 MAX_LAYERS          =  2       # max orders to layer the ob with on each side
 MKT_IMPACT          =  0      # base 1-sided spread between bid/offer
 NLAGS               =  2        # number of lags in time series
@@ -199,9 +199,9 @@ class MarketMaker( object ):
             for a in asks:
                 if a[0] > best_ask:
                     best_ask = a[0]
-            best_ask = asks[0][0]
+            
                    
-            #print({ 'bid': best_bid, 'ask': best_ask })
+            print({ 'bid': best_bid, 'ask': best_ask })
             return { 'bid': best_bid, 'ask': best_ask }
         elif self.price == 1:
             vwap = {}
@@ -311,7 +311,7 @@ class MarketMaker( object ):
             for a in asks:
                 if a[0] > best_ask:
                     best_ask = a[0]
-            best_ask = asks[0][0]
+            
                    
             #print({ 'bid': best_bid, 'ask': best_ask })
             return { 'bid': best_bid, 'ask': best_ask }
@@ -327,8 +327,8 @@ class MarketMaker( object ):
         } )
         self.futures['XBTUSD'] = self.futures['BTC/USD']
         del self.futures['BTC/USD']
-        self.futures['ETHUSD'] = self.futures['ETH/USD']
-        del self.futures['ETH/USD']
+        #self.futures['ETHUSD'] = self.futures['ETH/USD']
+        #del self.futures['ETH/USD']
         #print(self.futures['XBTH20'])
         for k in self.futures.keys():
             if self.futures[k]['info']['expiry'] == None:
@@ -419,56 +419,16 @@ class MarketMaker( object ):
             print( '\nMean Loop Time: %s' % round( self.mean_looptime, 2 ))
             #self.cancelall()
         print( '' )
-        data = {}
         for k in self.positions.keys():
-            if k == 'ETHUSD':
-                data['ETH-27DEC19'] = self.positions[ k ][ 'currentQty' ]
-                data['ETH-26JUN20'] = self.positions[ k ][ 'currentQty' ]
-                data['ETH-27MAR20'] = self.positions[ k ][ 'currentQty' ]
-                data['ETH-PERPETUAL'] = self.positions[ k ][ 'currentQty' ]
-            if k == 'XBTH20':
-                data['BTC-27MAR20'] = self.positions[ k ][ 'currentQty' ]
-            if k == 'XBTM20':
-                data['BTC-26JUN20'] = self.positions[ k ][ 'currentQty' ]
 
-            if k == 'XBTUSD':
-                data['BTC-PERPETUAL'] = self.positions[ k ][ 'currentQty' ]
-
-        with open('bitmex.json', 'w') as outfile:
-            json.dump(data, outfile)
-    
-        self.multsShort['ETHUSD'] = 1
-        self.multsShort['XBTUSD'] = 1
-        self.multsShort['XBTH20'] = 1
-        self.multsShort['XBTM20'] = 1
-        self.multsLong['ETHUSD'] = 1
-        self.multsLong['XBTUSD'] = 1
-        self.multsLong['XBTH20'] = 1
-        self.multsLong['XBTM20'] = 1
+            self.multsShort[k] = 1
+            self.multsLong[k] = 1
 
 
-        if self.positions['ETHUSD']['currentQty'] < 0:
-            self.multsShort['ETHUSD'] = (self.positions['ETHUSD']['currentQty'] / MIN_ORDER_SIZE) * POS_MOD
-        if self.positions['ETHUSD']['currentQty'] > 0:
-            self.multsLong['ETHUSD'] = (-1 * self.positions['ETHUSD']['currentQty'] / MIN_ORDER_SIZE) * POS_MOD
-
-        if self.positions['XBTUSD']['currentQty'] < 0:
-            self.multsShort['XBTUSD'] = (self.positions['XBTUSD']['currentQty'] / MIN_ORDER_SIZE) * POS_MOD
-        if self.positions['XBTUSD']['currentQty'] > 0:
-            self.multsLong['XBTUSD'] = (-1 * self.positions['XBTUSD']['currentQty'] / MIN_ORDER_SIZE) * POS_MOD
-
-
-        if self.positions['XBTH20']['currentQty'] < 0:
-            self.multsShort['XBTH20'] = (self.positions['XBTH20']['currentQty'] / MIN_ORDER_SIZE) * POS_MOD
-        if self.positions['XBTH20']['currentQty'] > 0:
-            self.multsLong['XBTH20'] = (-1 * self.positions['XBTH20']['currentQty'] / MIN_ORDER_SIZE) * POS_MOD
-
-        if self.positions['XBTM20']['currentQty'] < 0:
-            self.multsShort['XBTM20'] = (self.positions['XBTM20']['currentQty'] / MIN_ORDER_SIZE) * POS_MOD
-        if self.positions['XBTM20']['currentQty'] > 0:
-            self.multsLong['XBTM20'] = (-1 * self.positions['XBTM20']['currentQty'] / MIN_ORDER_SIZE) * POS_MOD
-
-
+            if self.positions[k]['currentQty'] < 0:
+                self.multsShort[k] = (self.positions[k]['currentQty'] / MIN_ORDER_SIZE) * POS_MOD
+            if self.positions[k]['currentQty'] > 0:
+                self.multsLong[k] = (-1 * self.positions[k]['currentQty'] / MIN_ORDER_SIZE) * POS_MOD
 #Vols       %
 #ETHUSD    28
 #XBTH20     0 mar 27
