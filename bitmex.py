@@ -80,7 +80,7 @@ WAVELEN_MTIME_CHK   = 15        # time in seconds between check for file change
 WAVELEN_OUT         = 15        # time in seconds between output to terminal
 WAVELEN_TS          = 15        # time in seconds between time series update
 VOL_PRIOR           = 150       # vol estimation starting level in percentage pts
-INDEX_MODINDEX_MOD = 0.5 #multiplier on modifer for bitmex XBTUSD / BXBT (index) diff as divisor for quantity, and as a multiplier on riskfac (which increases % difference among order prices in layers)
+INDEX_MOD = 0.5 #multiplier on modifer for bitmex XBTUSD / BXBT (index) diff as divisor for quantity, and as a multiplier on riskfac (which increases % difference among order prices in layers)
 POS_MOD = 0.5 #multiplier on modifier for position difference vs min_order_size as multiplier for quantity
 PRICE_MOD = 0.05 # for price == 2, the modifier for the PPO strategy as multiplier for quantity
 
