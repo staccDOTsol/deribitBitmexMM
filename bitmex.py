@@ -106,10 +106,11 @@ class MarketMaker( object ):
         self.futures            = OrderedDict()
         self.futures_prv        = OrderedDict()
         self.logger             = None
-        self.volatility = 0
-        self.price = 0
+        self.volatility = []
+        self.quantity_switch = []
+        self.price = []
         self.buysellsignal = 1
-        self.directional = 0
+        self.directional = []
         self.dsrsi = 50
         self.ws = {}
     
@@ -134,7 +135,9 @@ class MarketMaker( object ):
         
     
     def get_bbo( self, contract ): # Get best b/o excluding own orders
-        if self.directional == 1:
+        best_bids = []
+        best_asks = []
+        if 1 in self.directional:
             vwap = {}
             ohlcv2 = {}
             fut2 = contract
@@ -163,7 +166,7 @@ class MarketMaker( object ):
                 self.dsrsi = 50           
             #print(self.dsrsi)
         # Get orderbook
-        if self.price == 0:
+        if 0 in self.price:
             
             # Get orderbook
             if contract == 'BTC/USD':
@@ -203,8 +206,9 @@ class MarketMaker( object ):
             
                    
             print({ 'bid': best_bid, 'ask': best_ask })
-            return { 'bid': best_bid, 'ask': best_ask }
-        elif self.price == 1:
+            best_asks.append(best_ask)
+            best_bids.append(best_bid)
+        if 1 in self.price:
             vwap = {}
             ohlcv2 = {}
             fut2 = contract
@@ -236,8 +240,9 @@ class MarketMaker( object ):
                 ask = ticksize_ceil( self.get_spot(), tsz )
            
             print( { 'bid': bid, 'ask': ask })
-            return { 'bid': bid, 'ask': ask }
-        elif self.price == 2:
+            best_asks.append(best_ask)
+            best_bids.append(best_bid)
+        if 2 in self.quantity_switch:
             ohlcv2 = {}
             fut2 = contract
             if contract is 'XBTUSD':
@@ -276,46 +281,10 @@ class MarketMaker( object ):
                     self.buysellsignal = self.buysellsignal * (1-PRICE_MOD)
             except:
                 self.buysellsignal = 1
-            
-            # Get orderbook
-            if contract == 'BTC/USD':
-                ob = self.ws['XBTUSD'].market_depth()
-            else: 
-                ob = self.ws[contract].market_depth()
-            #ob      = self.client.fetchOrderBook( contract )
-            #print(ob)
-            bids = []
-            asks = []
-            for o in ob:
-                if o['side'] == 'Sell':
-                    bids.append([o['price'], o['size']])
-                else:
-                    asks.append([o['price'], o['size']])
-            
-            if contract == 'BTC/USD':
-                ords        = self.ws['XBTUSD'].open_orders('')
-            else: 
-                ords        = self.ws[contract].open_orders('')
-            #print(ords)
-            bid_ords    = [ o for o in ords if o [ 'side' ] == 'Buy'  ]
-            ask_ords    = [ o for o in ords if o [ 'side' ] == 'Sell' ]
-            best_bid    = None
-            best_ask    = None
 
-            err = 10 ** -( self.get_precision( contract ) + 1 )
-            
-            best_bid = 9999999999999999999
-            for a in bids:
-                if a[0] < best_bid:
-                    best_bid = a[0]
-            best_ask = 0
-            for a in asks:
-                if a[0] > best_ask:
-                    best_ask = a[0]
-            
-                   
+        
             #print({ 'bid': best_bid, 'ask': best_ask })
-            return { 'bid': best_bid, 'ask': best_ask }
+        return { 'bid': self.cal_average(best_bids), 'ask': self.cal_average(best_asks) }
 
     def get_futures( self ): # Get all current futures instruments
         
@@ -507,11 +476,12 @@ class MarketMaker( object ):
             tsz = self.get_ticksize( fut )            
             # Perform pricing
             vol = max( self.vols[ BTC_SYMBOL ], self.vols[ fut ] )
-            if self.volatility == 1:
+            if 1 in self.volatility:
                 eps         = BP * vol * RISK_CHARGE_VOL
-            elif self.volatility == 0:
+            if 0 in self.volatility:
                 eps = BP * 0.5 * RISK_CHARGE_VOL
-            eps = eps * self.diff
+            if 2 in self.price:
+                eps = eps * self.diff
             riskfac     = math.exp( eps )
             bbo     = self.get_bbo( fut )
             bid_mkt = bbo[ 'bid' ]
@@ -557,9 +527,12 @@ class MarketMaker( object ):
                     qty = round( prc * qtybtc / con_sz )                     
                     if 'ETH' in fut:
                         qty = round(qty / 28.3)
-                    qty = round ( qty * self.buysellsignal)    
-                    qty = round (qty * self.multsLong[fut])   
-                    qty = round (qty / self.diff)    
+                    if 2 in self.quantity_switch:
+                        qty = round ( qty * self.buysellsignal)    
+                    if 3 in self.quantity_switch:
+                        qty = round (qty * self.multsLong[fut])   
+                    if 1 in self.quantity_switch:
+                        qty = round (qty / self.diff)    
                     if qty < 0:
                         qty = qty * -1
                     if i < len_bid_ords:    
@@ -604,9 +577,12 @@ class MarketMaker( object ):
                     qty = round( prc * qtybtc / con_sz ) 
                     if 'ETH' in fut:
                         qty = round(qty / 28.3)
-                    qty = round ( qty / self.buysellsignal)    
-                    qty = round (qty * self.multsShort[fut])   
-                    qty = round (qty / self.diff) 
+                    if 2 in self.quantity_switch:
+                        qty = round ( qty / self.buysellsignal)    
+                    if 3 in self.quantity_switch:
+                        qty = round (qty * self.multsLong[fut])   
+                    if 1 in self.quantity_switch:
+                        qty = round (qty / self.diff) 
                     if qty < 0:
                         qty = qty * -1     
                     if i < len_ask_ords:
@@ -685,19 +661,25 @@ class MarketMaker( object ):
             # 1: StochRSI
             #
             # Price
-            # 0: none
+            # 0: best bid/offer
             # 1: vwap
-            # 2: ppo
+            # 2: BitMex Index Difference
             #
             # Volatility
             # 0: none
             # 1: ewma
+            #
+            # Quantity
+            # 0: none
+            # 1: BitMex Index Difference
+            # 2: PPO
+            # 3: Relative Volume
             with open('bitmex-settings.json', 'r') as read_file:
                 data = json.load(read_file)
                 self.directional = data['directional']
                 self.price = data['price']
                 self.volatility = data['volatility']
-
+                self.quantity_switch = data['quantity']
             # Restart if a new contract is listed
             if len( self.futures ) != len( self.futures_prv ):
                 self.restart()
@@ -762,7 +744,15 @@ class MarketMaker( object ):
             if self.monitor:
                 time.sleep( WAVELEN_OUT )
 
-            
+    def cal_average(self, num):
+        sum_num = 0
+        for t in num:
+            sum_num = sum_num + t           
+
+        avg = sum_num / len(num)
+        return avg
+
+
     def run_first( self ):
         
         self.create_client()
