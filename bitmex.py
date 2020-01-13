@@ -64,14 +64,14 @@ EWMA_WGT_COV        = 70         # parameter in % points for EWMA volatility est
 EWMA_WGT_LOOPTIME   = .6      # parameter for EWMA looptime estimate
 FORECAST_RETURN_CAP = 20        # cap on returns for vol estimate
 LOG_LEVEL           = logging.INFO
-MIN_ORDER_SIZE      = 100
+MIN_ORDER_SIZE      = 10
 MAX_LAYERS          =  2       # max orders to layer the ob with on each side
 MKT_IMPACT          =  0      # base 1-sided spread between bid/offer
 NLAGS               =  2        # number of lags in time series
 PCT                 = 100 * BP  # one percentage point
 PCT_LIM_LONG        = 900       # % position limit long
 PCT_LIM_SHORT       = 1800       # % position limit short
-PCT_QTY_BASE        = 2000       # pct order qty in bps as pct of acct on each order
+PCT_QTY_BASE        = 20000       # pct order qty in bps as pct of acct on each order
 MIN_LOOP_TIME       =   0.1       # Minimum time between loops
 RISK_CHARGE_VOL     =   7.5   # vol risk charge in bps per 100 vol
 SECONDS_IN_DAY      = 3600 * 24
@@ -519,15 +519,16 @@ class MarketMaker( object ):
                     qty = round( prc * qtybtc / con_sz )                     
                     if 'ETH' in fut:
                         qty = round(qty / 28.3)
+                    if 4 in self.quantity_switch:
+                        if self.diffdeltab[fut] > 0 or self.diffdeltab[fut] < 0:
+                            qty = round(qty / (self.diffdeltab[fut] / 100)) 
                     if 2 in self.quantity_switch:
                         qty = round ( qty * self.buysellsignal[fut])    
                     if 3 in self.quantity_switch:
-                        qty = round (qty / self.multsLong[fut])   
+                        qty = round (qty / self.multsShort[fut])   
                     if 1 in self.quantity_switch:
                         qty = round (qty / self.diff) 
-                    if 4 in self.quantity_switch:
-                        if self.diffdeltab[fut] > 0 or self.diffdeltab[fut] < 0:
-                            qty = round(qty / (self.diffdeltab[fut] / 100))   
+                      
                     if qty < 0:
                         qty = qty * -1
                     if i < len_bid_ords:    
@@ -572,6 +573,10 @@ class MarketMaker( object ):
                     qty = round( prc * qtybtc / con_sz ) 
                     if 'ETH' in fut:
                         qty = round(qty / 28.3)
+                    if 4 in self.quantity_switch:
+                        if self.diffdeltab[fut] > 0 or self.diffdeltab[fut] < 0:
+                            qty = round(qty / (self.diffdeltab[fut] / 100)) 
+                    
                     if 2 in self.quantity_switch:
                         qty = round ( qty / self.buysellsignal[fut])    
                     if 3 in self.quantity_switch:
@@ -579,9 +584,6 @@ class MarketMaker( object ):
                     if 1 in self.quantity_switch:
                         qty = round (qty / self.diff)
 
-                    if 4 in self.quantity_switch:
-                        if self.diffdeltab[fut] > 0 or self.diffdeltab[fut] < 0:
-                            qty = round(qty / (self.diffdeltab[fut] / 100)) 
                     if qty < 0:
                         qty = qty * -1     
                     if i < len_ask_ords:
