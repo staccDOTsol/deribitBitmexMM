@@ -107,6 +107,10 @@ class MarketMaker( object ):
         self.futures_prv        = OrderedDict()
         self.logger             = None
         self.volatility = []
+        self.bbw = 0
+        self.atr = 0
+        self.diffdeltab = 0
+        self.bands = []
         self.quantity_switch = []
         self.price = []
         self.buysellsignal = 1
@@ -166,6 +170,59 @@ class MarketMaker( object ):
                 self.dsrsi = 50           
             #print(self.dsrsi)
         # Get orderbook
+        if 2 in self.volatility or 3 in self.price or 4 in self.quantity_switch:
+            vwap = {}
+            ohlcv2 = {}
+            fut2 = contract
+            if contract is 'XBTUSD':
+                fut2 = 'BTC/USD'
+            if contract is 'ETHUSD':
+                fut2 = 'ETH/USD'
+            #print(fut2)
+            now = datetime.now()
+            format_iso_now = now.isoformat()
+
+            then = now - timedelta(minutes=100)
+            format_later_iso = then.isoformat()
+            thetime = then.strftime('%Y-%m-%dT%H:%M:%S')
+            ohlcv = self.client.fetchOHLCV(fut2, '1m', self.client.parse8601 (thetime))
+            
+
+            ohlcv2 = []
+            for o in ohlcv:
+                ohlcv2.append([o[1], o[2], o[3], o[4], o[5]])
+            df = pd.DataFrame(ohlcv2, columns=['open', 'high', 'low', 'close', 'volume'])
+            self.bands = TA.BBANDS(df).iloc[-1]
+            self.bbw = (TA.BBWIDTH(df).iloc[-1])
+            deltab = (self.get_spot() - self.bands['BB_LOWER']) / (self.bands['BB_UPPER'] - self.bands['BB_LOWER'])
+            if deltab > 50:
+                self.diffdeltab = deltab - 50
+            if deltab < 50:
+                self.diffdeltab = 50 - deltab
+        if 3 in self.volatility:
+            vwap = {}
+            ohlcv2 = {}
+            fut2 = contract
+            if contract is 'XBTUSD':
+                fut2 = 'BTC/USD'
+            if contract is 'ETHUSD':
+                fut2 = 'ETH/USD'
+            #print(fut2)
+            now = datetime.now()
+            format_iso_now = now.isoformat()
+
+            then = now - timedelta(minutes=100)
+            format_later_iso = then.isoformat()
+            thetime = then.strftime('%Y-%m-%dT%H:%M:%S')
+            ohlcv = self.client.fetchOHLCV(fut2, '1m', self.client.parse8601 (thetime))
+            
+
+            ohlcv2 = []
+            for o in ohlcv:
+                ohlcv2.append([o[1], o[2], o[3], o[4], o[5]])
+            df = pd.DataFrame(ohlcv2, columns=['open', 'high', 'low', 'close', 'volume'])
+            self.atr = TA.ATR(df).iloc[-1]
+            
         if 0 in self.price:
             
             # Get orderbook
@@ -482,6 +539,12 @@ class MarketMaker( object ):
                 eps = BP * 0.5 * RISK_CHARGE_VOL
             if 2 in self.price:
                 eps = eps * self.diff
+            if 3 in self.price:
+                eps = eps * (self.diffdeltab / 100) #.25 .50
+            if 2 in self.volatility:
+                eps = eps * (1+self.bbw)
+            if 3 in self.volatility:
+                eps = eps * (self.atr/100)
             riskfac     = math.exp( eps )
             bbo     = self.get_bbo( fut )
             bid_mkt = bbo[ 'bid' ]
@@ -530,9 +593,11 @@ class MarketMaker( object ):
                     if 2 in self.quantity_switch:
                         qty = round ( qty * self.buysellsignal)    
                     if 3 in self.quantity_switch:
-                        qty = round (qty * self.multsLong[fut])   
+                        qty = round (qty / self.multsLong[fut])   
                     if 1 in self.quantity_switch:
-                        qty = round (qty / self.diff)    
+                        qty = round (qty / self.diff) 
+                    if 4 in self.quantity_switch:
+                        qty = round(qty * (self.diffdeltab / 100))   
                     if qty < 0:
                         qty = qty * -1
                     if i < len_bid_ords:    
@@ -580,9 +645,12 @@ class MarketMaker( object ):
                     if 2 in self.quantity_switch:
                         qty = round ( qty / self.buysellsignal)    
                     if 3 in self.quantity_switch:
-                        qty = round (qty * self.multsLong[fut])   
+                        qty = round (qty / self.multsLong[fut])   
                     if 1 in self.quantity_switch:
-                        qty = round (qty / self.diff) 
+                        qty = round (qty / self.diff)
+
+                    if 4 in self.quantity_switch:
+                        qty = round(qty * (self.diffdeltab / 100)) 
                     if qty < 0:
                         qty = qty * -1     
                     if i < len_ask_ords:
@@ -664,16 +732,20 @@ class MarketMaker( object ):
             # 0: best bid/offer
             # 1: vwap
             # 2: BitMex Index Difference
+            # 3: BBands %B
             #
             # Volatility
             # 0: none
             # 1: ewma
+            # 2: BBands Width
+            # 3: ATR
             #
             # Quantity
             # 0: none
             # 1: BitMex Index Difference
             # 2: PPO
             # 3: Relative Volume
+            # 4: BBands %B
             with open('bitmex-settings.json', 'r') as read_file:
                 data = json.load(read_file)
                 self.directional = data['directional']
