@@ -177,11 +177,11 @@ class MarketMaker( object ):
             if (float(self.bands[fut2]['BB_UPPER'] - self.bands[fut2]['BB_LOWER'])) > 0:
                 deltab = (self.get_spot() - self.bands[fut2]['BB_LOWER']) / (self.bands[fut2]['BB_UPPER'] - self.bands[fut2]['BB_LOWER'])
                 if deltab > 50:
-                    self.diffdeltab[fut2] = deltab - 50
+                    self.diffdeltab[fut2] = (deltab - 50) / 100 + 1
                 if deltab < 50:
-                    self.diffdeltab[fut2] = 50 - deltab
+                    self.diffdeltab[fut2] = (50 - deltab) / 100 + 1
             else:
-                self.diffdeltab[fut2] = 25
+                self.diffdeltab[fut2] = 25 / 100 + 1
         if 3 in self.volatility:
             self.atr[fut2] = TA.ATR(df).iloc[-1]
             
@@ -464,7 +464,7 @@ class MarketMaker( object ):
                 eps = eps * self.diff
             if 3 in self.price:
                 if self.diffdeltab[fut] > 0 or self.diffdeltab[fut] < 0:
-                    eps = eps * (self.diffdeltab[fut] / 100) #.25 .50
+                    eps = eps *self.diffdeltab[fut]
             if 2 in self.volatility:
                 eps = eps * (1+self.bbw[fut])
             if 3 in self.volatility:
@@ -524,7 +524,7 @@ class MarketMaker( object ):
                         qty = round(qty / 28.3)
                     if 4 in self.quantity_switch:
                         if self.diffdeltab[fut] > 0 or self.diffdeltab[fut] < 0:
-                            qty = round(qty / (self.diffdeltab[fut] / 100)) 
+                            qty = round(qty / (self.diffdeltab[fut])) 
                     if 2 in self.quantity_switch:
                         qty = round ( qty * self.buysellsignal[fut])    
                     if 3 in self.quantity_switch:
@@ -578,7 +578,7 @@ class MarketMaker( object ):
                         qty = round(qty / 28.3)
                     if 4 in self.quantity_switch:
                         if self.diffdeltab[fut] > 0 or self.diffdeltab[fut] < 0:
-                            qty = round(qty / (self.diffdeltab[fut] / 100)) 
+                            qty = round(qty / (self.diffdeltab[fut])) 
                     
                     if 2 in self.quantity_switch:
                         qty = round ( qty / self.buysellsignal[fut])    
