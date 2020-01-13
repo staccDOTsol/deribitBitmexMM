@@ -64,7 +64,7 @@ EWMA_WGT_COV        = 70         # parameter in % points for EWMA volatility est
 EWMA_WGT_LOOPTIME   = .6      # parameter for EWMA looptime estimate
 FORECAST_RETURN_CAP = 20        # cap on returns for vol estimate
 LOG_LEVEL           = logging.INFO
-MIN_ORDER_SIZE      = 10
+MIN_ORDER_SIZE      = 100
 MAX_LAYERS          =  2       # max orders to layer the ob with on each side
 MKT_IMPACT          =  0      # base 1-sided spread between bid/offer
 NLAGS               =  2        # number of lags in time series
@@ -521,14 +521,14 @@ class MarketMaker( object ):
 
                     qty = round( prc * qtybtc / con_sz )                     
                     if 'ETH' in fut:
-                        qty = round(qty / 28.3)
+                        qty = round(qty / 28.3 * 6)
                     if 4 in self.quantity_switch:
                         if self.diffdeltab[fut] > 0 or self.diffdeltab[fut] < 0:
                             qty = round(qty / (self.diffdeltab[fut])) 
                     if 2 in self.quantity_switch:
                         qty = round ( qty * self.buysellsignal[fut])    
                     if 3 in self.quantity_switch:
-                        qty = round (qty / self.multsShort[fut])   
+                        qty = round (qty *(1 + self.multsShort[fut] / 100))   
                     if 1 in self.quantity_switch:
                         qty = round (qty / self.diff) 
                       
@@ -575,7 +575,7 @@ class MarketMaker( object ):
                         
                     qty = round( prc * qtybtc / con_sz ) 
                     if 'ETH' in fut:
-                        qty = round(qty / 28.3)
+                        qty = round(qty / 28.3 * 6)
                     if 4 in self.quantity_switch:
                         if self.diffdeltab[fut] > 0 or self.diffdeltab[fut] < 0:
                             qty = round(qty / (self.diffdeltab[fut])) 
@@ -583,7 +583,7 @@ class MarketMaker( object ):
                     if 2 in self.quantity_switch:
                         qty = round ( qty / self.buysellsignal[fut])    
                     if 3 in self.quantity_switch:
-                        qty = round (qty / self.multsLong[fut])   
+                        qty = round (qty * (1+self.multsLong[fut]/100))   
                     if 1 in self.quantity_switch:
                         qty = round (qty / self.diff)
 
