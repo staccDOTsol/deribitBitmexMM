@@ -64,7 +64,7 @@ EWMA_WGT_COV        = 70         # parameter in % points for EWMA volatility est
 EWMA_WGT_LOOPTIME   = .6      # parameter for EWMA looptime estimate
 FORECAST_RETURN_CAP = 20        # cap on returns for vol estimate
 LOG_LEVEL           = logging.INFO
-MIN_ORDER_SIZE      = 1
+MIN_ORDER_SIZE      = 100
 MAX_LAYERS          =  2       # max orders to layer the ob with on each side
 MKT_IMPACT          =  0      # base 1-sided spread between bid/offer
 NLAGS               =  2        # number of lags in time series
@@ -490,7 +490,9 @@ class MarketMaker( object ):
                 bid0            = mid_mkt * math.exp( -MKT_IMPACT )
                 
                 bids    = [ bid0 * riskfac ** -i for i in range( 1, nbids + 1 ) ]
-
+                if math.isnan(bids[0]):
+                    bbo     = self.get_bbo( fut )
+                    bids[ 0 ]   = ticksize_floor( bbo['bid'], tsz )
                 bids[ 0 ]   = ticksize_floor( bids[ 0 ], tsz )
                 
             if place_asks:
@@ -500,6 +502,9 @@ class MarketMaker( object ):
                 ask0            = mid_mkt * math.exp(  MKT_IMPACT )
                 
                 asks    = [ ask0 * riskfac ** i for i in range( 1, nasks + 1 ) ]
+                if math.isnan(asks[0]):
+                    bbo     = self.get_bbo( fut )
+                    asks[ 0 ]   = ticksize_floor( bbo['ask'], tsz )
                 
                 asks[ 0 ]   = ticksize_ceil( asks[ 0 ], tsz  )
             for i in range( max( nbids, nasks )):
