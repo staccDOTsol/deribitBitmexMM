@@ -397,7 +397,7 @@ class MarketMaker( object ):
 
             if self.positions[k]['currentQty'] > MIN_ORDER_SIZE:
                 self.multsShort[k] = (self.positions[k]['currentQty'] / MIN_ORDER_SIZE) * POS_MOD
-            if self.positions[k]['currentQty'] < MIN_ORDER_SIZE:
+            if self.positions[k]['currentQty'] < -1 * MIN_ORDER_SIZE:
                 self.multsLong[k] = (-1 * self.positions[k]['currentQty'] / MIN_ORDER_SIZE) * POS_MOD
 #Vols       %
 #ETHUSD    28
