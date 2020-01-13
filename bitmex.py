@@ -492,7 +492,8 @@ class MarketMaker( object ):
                 bids    = [ bid0 * riskfac ** -i for i in range( 1, nbids + 1 ) ]
                 if math.isnan(bids[0]):
                     bbo     = self.get_bbo( fut )
-                    bids[ 0 ]   = ticksize_floor( bbo['bid'], tsz )
+                    for i in range(0, MAX_LAYERS):
+                        bids[ i ]   = ticksize_floor( bbo['bid'], tsz )
                 bids[ 0 ]   = ticksize_floor( bids[ 0 ], tsz )
                 
             if place_asks:
@@ -504,7 +505,9 @@ class MarketMaker( object ):
                 asks    = [ ask0 * riskfac ** i for i in range( 1, nasks + 1 ) ]
                 if math.isnan(asks[0]):
                     bbo     = self.get_bbo( fut )
-                    asks[ 0 ]   = ticksize_floor( bbo['ask'], tsz )
+
+                    for i in range(0, MAX_LAYERS):
+                        asks[ i ]   = ticksize_floor( bbo['ask'], tsz )
                 
                 asks[ 0 ]   = ticksize_ceil( asks[ 0 ], tsz  )
             for i in range( max( nbids, nasks )):
