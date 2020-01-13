@@ -64,7 +64,7 @@ EWMA_WGT_COV        = 70         # parameter in % points for EWMA volatility est
 EWMA_WGT_LOOPTIME   = .6      # parameter for EWMA looptime estimate
 FORECAST_RETURN_CAP = 20        # cap on returns for vol estimate
 LOG_LEVEL           = logging.INFO
-MIN_ORDER_SIZE      = 100
+MIN_ORDER_SIZE      = 1
 MAX_LAYERS          =  2       # max orders to layer the ob with on each side
 MKT_IMPACT          =  0      # base 1-sided spread between bid/offer
 NLAGS               =  2        # number of lags in time series
@@ -463,7 +463,8 @@ class MarketMaker( object ):
             if 2 in self.price:
                 eps = eps * self.diff
             if 3 in self.price:
-                eps = eps * (self.diffdeltab[fut] / 100) #.25 .50
+                if self.diffdeltab[fut] > 0 or self.diffdeltab[fut] < 0:
+                    eps = eps * (self.diffdeltab[fut] / 100) #.25 .50
             if 2 in self.volatility:
                 eps = eps * (1+self.bbw[fut])
             if 3 in self.volatility:
@@ -519,8 +520,9 @@ class MarketMaker( object ):
                         qty = round (qty / self.multsLong[fut])   
                     if 1 in self.quantity_switch:
                         qty = round (qty / self.diff) 
-                    if 4 in self.quantity_switch: 
-                        qty = round(qty / (self.diffdeltab[fut] / 100))    # 0.01 .5 1
+                    if 4 in self.quantity_switch:
+                        if self.diffdeltab[fut] > 0 or self.diffdeltab[fut] < 0:
+                            qty = round(qty / (self.diffdeltab[fut] / 100))   
                     if qty < 0:
                         qty = qty * -1
                     if i < len_bid_ords:    
@@ -573,7 +575,8 @@ class MarketMaker( object ):
                         qty = round (qty / self.diff)
 
                     if 4 in self.quantity_switch:
-                        qty = round(qty / (self.diffdeltab[fut] / 100)) 
+                        if self.diffdeltab[fut] > 0 or self.diffdeltab[fut] < 0:
+                            qty = round(qty / (self.diffdeltab[fut] / 100)) 
                     if qty < 0:
                         qty = qty * -1     
                     if i < len_ask_ords:
