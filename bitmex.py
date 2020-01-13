@@ -107,13 +107,13 @@ class MarketMaker( object ):
         self.futures_prv        = OrderedDict()
         self.logger             = None
         self.volatility = []
-        self.bbw = 0
-        self.atr = 0
-        self.diffdeltab = 0
-        self.bands = []
+        self.bbw = {}
+        self.atr = {}
+        self.diffdeltab = {}
+        self.bands = {}
         self.quantity_switch = []
         self.price = []
-        self.buysellsignal = 1
+        self.buysellsignal = {}
         self.directional = []
         self.dsrsi = 50
         self.ws = {}
@@ -139,30 +139,30 @@ class MarketMaker( object ):
         
     
     def get_bbo( self, contract ): # Get best b/o excluding own orders
+        vwap = {}
+        ohlcv2 = {}
+        fut2 = contract
+        if contract is 'XBTUSD':
+            fut2 = 'BTC/USD'
+        if contract is 'ETHUSD':
+            fut2 = 'ETH/USD'
+        now = datetime.now()
+        format_iso_now = now.isoformat()
+
+        then = now - timedelta(minutes=100)
+        format_later_iso = then.isoformat()
+        thetime = then.strftime('%Y-%m-%dT%H:%M:%S')
+        ohlcv = self.client.fetchOHLCV(fut2, '1m', self.client.parse8601 (thetime))
+        
+
+        ohlcv2 = []
+        for o in ohlcv:
+            ohlcv2.append([o[1], o[2], o[3], o[4], o[5]])
+        df = pd.DataFrame(ohlcv2, columns=['open', 'high', 'low', 'close', 'volume'])
+        
         best_bids = []
         best_asks = []
         if 1 in self.directional:
-            vwap = {}
-            ohlcv2 = {}
-            fut2 = contract
-            if contract is 'XBTUSD':
-                fut2 = 'BTC/USD'
-            if contract is 'ETHUSD':
-                fut2 = 'ETH/USD'
-            #print(fut2)
-            now = datetime.now()
-            format_iso_now = now.isoformat()
-
-            then = now - timedelta(minutes=100)
-            format_later_iso = then.isoformat()
-            thetime = then.strftime('%Y-%m-%dT%H:%M:%S')
-            ohlcv = self.client.fetchOHLCV(fut2, '1m', self.client.parse8601 (thetime))
-            
-
-            ohlcv2 = []
-            for o in ohlcv:
-                ohlcv2.append([o[1], o[2], o[3], o[4], o[5]])
-            df = pd.DataFrame(ohlcv2, columns=['open', 'high', 'low', 'close', 'volume'])
             #print(df)
             try:
                 self.dsrsi = TA.STOCHRSI(df).iloc[-1] * 100
@@ -171,57 +171,19 @@ class MarketMaker( object ):
             #print(self.dsrsi)
         # Get orderbook
         if 2 in self.volatility or 3 in self.price or 4 in self.quantity_switch:
-            vwap = {}
-            ohlcv2 = {}
-            fut2 = contract
-            if contract is 'XBTUSD':
-                fut2 = 'BTC/USD'
-            if contract is 'ETHUSD':
-                fut2 = 'ETH/USD'
-            #print(fut2)
-            now = datetime.now()
-            format_iso_now = now.isoformat()
-
-            then = now - timedelta(minutes=100)
-            format_later_iso = then.isoformat()
-            thetime = then.strftime('%Y-%m-%dT%H:%M:%S')
-            ohlcv = self.client.fetchOHLCV(fut2, '1m', self.client.parse8601 (thetime))
-            
-
-            ohlcv2 = []
-            for o in ohlcv:
-                ohlcv2.append([o[1], o[2], o[3], o[4], o[5]])
-            df = pd.DataFrame(ohlcv2, columns=['open', 'high', 'low', 'close', 'volume'])
-            self.bands = TA.BBANDS(df).iloc[-1]
-            self.bbw = (TA.BBWIDTH(df).iloc[-1])
-            deltab = (self.get_spot() - self.bands['BB_LOWER']) / (self.bands['BB_UPPER'] - self.bands['BB_LOWER'])
-            if deltab > 50:
-                self.diffdeltab = deltab - 50
-            if deltab < 50:
-                self.diffdeltab = 50 - deltab
+            self.bands[fut2] = TA.BBANDS(df).iloc[-1]
+            self.bbw[fut2] = (TA.BBWIDTH(df).iloc[-1])
+            print(float(self.bands[fut2]['BB_UPPER'] - self.bands[fut2]['BB_LOWER']))
+            if (float(self.bands[fut2]['BB_UPPER'] - self.bands[fut2]['BB_LOWER'])) > 0:
+                deltab = (self.get_spot() - self.bands[fut2]['BB_LOWER']) / (self.bands[fut2]['BB_UPPER'] - self.bands[fut2]['BB_LOWER'])
+                if deltab > 50:
+                    self.diffdeltab[fut2] = deltab - 50
+                if deltab < 50:
+                    self.diffdeltab[fut2] = 50 - deltab
+            else:
+                self.diffdeltab[fut2] = 25
         if 3 in self.volatility:
-            vwap = {}
-            ohlcv2 = {}
-            fut2 = contract
-            if contract is 'XBTUSD':
-                fut2 = 'BTC/USD'
-            if contract is 'ETHUSD':
-                fut2 = 'ETH/USD'
-            #print(fut2)
-            now = datetime.now()
-            format_iso_now = now.isoformat()
-
-            then = now - timedelta(minutes=100)
-            format_later_iso = then.isoformat()
-            thetime = then.strftime('%Y-%m-%dT%H:%M:%S')
-            ohlcv = self.client.fetchOHLCV(fut2, '1m', self.client.parse8601 (thetime))
-            
-
-            ohlcv2 = []
-            for o in ohlcv:
-                ohlcv2.append([o[1], o[2], o[3], o[4], o[5]])
-            df = pd.DataFrame(ohlcv2, columns=['open', 'high', 'low', 'close', 'volume'])
-            self.atr = TA.ATR(df).iloc[-1]
+            self.atr[fut2] = TA.ATR(df).iloc[-1]
             
         if 0 in self.price:
             
@@ -266,26 +228,6 @@ class MarketMaker( object ):
             best_asks.append(best_ask)
             best_bids.append(best_bid)
         if 1 in self.price:
-            vwap = {}
-            ohlcv2 = {}
-            fut2 = contract
-            if contract is 'XBTUSD':
-                fut2 = 'BTC/USD'
-            if contract is 'ETHUSD':
-                fut2 = 'ETH/USD'
-            now = datetime.now()
-            format_iso_now = now.isoformat()
-
-            then = now - timedelta(minutes=100)
-            format_later_iso = then.isoformat()
-            thetime = then.strftime('%Y-%m-%dT%H:%M:%S')
-            ohlcv = self.client.fetchOHLCV(fut2, '1m', self.client.parse8601 (thetime))
-            
-
-            ohlcv2 = []
-            for o in ohlcv:
-                ohlcv2.append([o[1], o[2], o[3], o[4], o[5]])
-            df = pd.DataFrame(ohlcv2, columns=['open', 'high', 'low', 'close', 'volume'])
             dvwap = TA.VWAP(df)
             #print(dvwap)
             tsz = self.get_ticksize( contract ) 
@@ -300,44 +242,25 @@ class MarketMaker( object ):
             best_asks.append(best_ask)
             best_bids.append(best_bid)
         if 2 in self.quantity_switch:
-            ohlcv2 = {}
-            fut2 = contract
-            if contract is 'XBTUSD':
-                fut2 = 'BTC/USD'
-            if contract is 'ETHUSD':
-                fut2 = 'ETH/USD'
-            now = datetime.now()
-            format_iso_now = now.isoformat()
-
-            then = now - timedelta(minutes=100)
-            format_later_iso = then.isoformat()
-            thetime = then.strftime('%Y-%m-%dT%H:%M:%S')
-            ohlcv = self.client.fetchOHLCV(fut2, '1m', self.client.parse8601 (thetime))
-            
-
-            ohlcv2 = []
-            for o in ohlcv:
-                ohlcv2.append([o[1], o[2], o[3], o[4], o[5]])
-            df = pd.DataFrame(ohlcv2, columns=['open', 'high', 'low', 'close', 'volume'])
             
             dppo = TA.PPO(df)
-            self.buysellsignal = 1
+            self.buysellsignal[fut2] = 1
             try:
                 if(dppo.iloc[-1].PPO > 0):
-                    self.buysellsignal = self.buysellsignal * (1+PRICE_MOD)
+                    self.buysellsignal[fut2] = self.buysellsignal[fut2] * (1+PRICE_MOD)
                 else:
-                    self.buysellsignal = self.buysellsignal * (1-PRICE_MOD)
+                    self.buysellsignal[fut2] = self.buysellsignal[fut2] * (1-PRICE_MOD)
 
                 if(dppo.iloc[-1].HISTO > 0):
-                    self.buysellsignal = self.buysellsignal* (1+PRICE_MOD)
+                    self.buysellsignal[fut2] = self.buysellsignal[fut2]* (1+PRICE_MOD)
                 else:
-                    self.buysellsignal = self.buysellsignal * (1-PRICE_MOD)
+                    self.buysellsignal[fut2] = self.buysellsignal[fut2] * (1-PRICE_MOD)
                 if(dppo.iloc[-1].SIGNAL > 0):
-                    self.buysellsignal = self.buysellsignal * (1+PRICE_MOD)
+                    self.buysellsignal[fut2] = self.buysellsignal[fut2] * (1+PRICE_MOD)
                 else:
-                    self.buysellsignal = self.buysellsignal * (1-PRICE_MOD)
+                    self.buysellsignal[fut2] = self.buysellsignal[fut2] * (1-PRICE_MOD)
             except:
-                self.buysellsignal = 1
+                self.buysellsignal[fut2] = 1
 
         
             #print({ 'bid': best_bid, 'ask': best_ask })
@@ -540,11 +463,11 @@ class MarketMaker( object ):
             if 2 in self.price:
                 eps = eps * self.diff
             if 3 in self.price:
-                eps = eps * (self.diffdeltab / 100) #.25 .50
+                eps = eps * (self.diffdeltab[fut] / 100) #.25 .50
             if 2 in self.volatility:
-                eps = eps * (1+self.bbw)
+                eps = eps * (1+self.bbw[fut])
             if 3 in self.volatility:
-                eps = eps * (self.atr/100)
+                eps = eps * (self.atr[fut]/100)
             riskfac     = math.exp( eps )
             bbo     = self.get_bbo( fut )
             bid_mkt = bbo[ 'bid' ]
@@ -591,13 +514,13 @@ class MarketMaker( object ):
                     if 'ETH' in fut:
                         qty = round(qty / 28.3)
                     if 2 in self.quantity_switch:
-                        qty = round ( qty * self.buysellsignal)    
+                        qty = round ( qty * self.buysellsignal[fut])    
                     if 3 in self.quantity_switch:
                         qty = round (qty / self.multsLong[fut])   
                     if 1 in self.quantity_switch:
                         qty = round (qty / self.diff) 
-                    if 4 in self.quantity_switch:
-                        qty = round(qty * (self.diffdeltab / 100))   
+                    if 4 in self.quantity_switch: 
+                        qty = round(qty / (self.diffdeltab[fut] / 100))    # 0.01 .5 1
                     if qty < 0:
                         qty = qty * -1
                     if i < len_bid_ords:    
@@ -643,14 +566,14 @@ class MarketMaker( object ):
                     if 'ETH' in fut:
                         qty = round(qty / 28.3)
                     if 2 in self.quantity_switch:
-                        qty = round ( qty / self.buysellsignal)    
+                        qty = round ( qty / self.buysellsignal[fut])    
                     if 3 in self.quantity_switch:
                         qty = round (qty / self.multsLong[fut])   
                     if 1 in self.quantity_switch:
                         qty = round (qty / self.diff)
 
                     if 4 in self.quantity_switch:
-                        qty = round(qty * (self.diffdeltab / 100)) 
+                        qty = round(qty / (self.diffdeltab[fut] / 100)) 
                     if qty < 0:
                         qty = qty * -1     
                     if i < len_ask_ords:
@@ -833,6 +756,11 @@ class MarketMaker( object ):
         # Get all futures contracts
         self.get_futures()
         for k in self.futures.keys():
+            self.bbw[k] = 0
+            self.bands[k] = []
+            self.atr[k] = 0
+            self.diffdeltab[k] = 0
+            self.buysellsignal[k] = 1
             #sleep(120)
             print(k)
             sleep(11)
