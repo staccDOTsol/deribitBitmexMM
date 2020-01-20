@@ -1,3 +1,4 @@
 	{"directional": [1],
-	"price": [0,1],
-	"volatility": [1]}
+	"price": [0,1,2,3],
+	"volatility": [1,2,3],
+	"quantity": [1,2,3,4]}
