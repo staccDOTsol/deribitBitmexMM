@@ -46,10 +46,10 @@ parser.add_argument( '--no-restart',
                      action = 'store_false' )
 
 args    = parser.parse_args()
-URL     = 'https://test.deribit.com'#ctrl+h!!!!!
+URL     = 'https://www.deribit.com'#ctrl+h!!!!!
 
-KEY     = 'q5VK3snD'
-SECRET  = 'ghU1bnT3X89_KhgTj8b55w7Q-V02cVgAS_uUJHcE89U'
+KEY     = 'iK8orQnY'
+SECRET  = 'VautqVCoZzqPk065IOG_KzBx07bdS90_gvV2FJyuFSA'
 BP                  = 1e-4      # one basis point
 BTC_SYMBOL          = 'btc'
 CONTRACT_SIZE       = 10        # USD
@@ -59,14 +59,14 @@ EWMA_WGT_COV        = 66         # parameter in % points for EWMA volatility est
 EWMA_WGT_LOOPTIME   = 2.5      # parameter for EWMA looptime estimate
 FORECAST_RETURN_CAP = 100        # cap on returns for vol estimate
 LOG_LEVEL           = logging.INFO
-MIN_ORDER_SIZE      = 10
-MAX_LAYERS          =  3       # max orders to layer the ob with on each side
+MIN_ORDER_SIZE      = 60
+MAX_LAYERS          =  2       # max orders to layer the ob with on each side
 MKT_IMPACT          =  0      # base 1-sided spread between bid/offer
 NLAGS               =  2        # number of lags in time series
 PCT                 = 100 * BP  # one percentage point
-PCT_LIM_LONG        = 90       # % position limit long
-PCT_LIM_SHORT       = 180    # % position limit short
-PCT_QTY_BASE        = 10     # pct order qty in bps as pct of acct on each order
+PCT_LIM_LONG        = 20       # % position limit long
+PCT_LIM_SHORT       = 20    # % position limit short
+PCT_QTY_BASE        = 0.01   # pct order qty in bps as pct of acct on each order
 MIN_LOOP_TIME       =   0.1       # Minimum time between loops
 RISK_CHARGE_VOL     =   6.66   # vol risk charge in bps per 100 vol
 SECONDS_IN_DAY      = 3600 * 24
@@ -262,7 +262,7 @@ class MarketMaker( object ):
         self.futures_prv    = cp.deepcopy( self.futures )
         insts               = self.client.getinstruments()
         self.futures        = sort_by_key( { 
-            i[ 'instrumentName' ]: i for i in insts  if ('BTC-PERPETUAL' in i['instrumentName'] )#or 'ETH-PERPETUAL' in  i['instrumentName'] ) and i[ 'kind' ] == 'future'#  
+            i[ 'instrumentName' ]: i for i in insts  if ('BTC-' in i['instrumentName'] )  and i[ 'kind' ] == 'future'#  
         } )
         
         for k, v in self.futures.items():
@@ -348,7 +348,7 @@ class MarketMaker( object ):
                 if self.positions[k][key] > MIN_ORDER_SIZE:
                     self.multsShort[k] = (self.positions[k][key] / MIN_ORDER_SIZE) * POS_MOD
                 if self.positions[k][key] < -1 * MIN_ORDER_SIZE:
-                    self.multsLong[k] = (-1 * self.positions[k]['currentQty'] / MIN_ORDER_SIZE) * POS_MOD
+                    self.multsLong[k] = (-1 * self.positions[k][key] / MIN_ORDER_SIZE) * POS_MOD
 #Vols       
         
     def place_orders( self ):
@@ -463,7 +463,8 @@ class MarketMaker( object ):
                     else:
                         prc = bids[ 0 ]
 
-                    qty = round( prc * qtybtc / (con_sz / 1) )                        
+                    qty = round( prc * qtybtc / (con_sz / 1) ) 
+                    qty = 50                       
                     if 'ETH' in fut:
                         qty = round( prc * 450 * qtybtc / (con_sz / 1) ) 
                     if 4 in self.quantity_switch:
@@ -515,7 +516,8 @@ class MarketMaker( object ):
                         
                     qty = round( prc * qtybtc / (con_sz / 1) )
                     if 'ETH' in fut:
-                        qty = round( prc * 450 * qtybtc / (con_sz / 1) )    
+                        qty = round( prc * 450 * qtybtc / (con_sz / 1) ) 
+                    qty = 50   
                     if 4 in self.quantity_switch:
                         if self.diffdeltab[fut] > 0 or self.diffdeltab[fut] < 0:
                             qty = round(qty / (self.diffdeltab[fut])) 
@@ -623,7 +625,7 @@ class MarketMaker( object ):
             if ( t_now - t_ts ).total_seconds() >= WAVELEN_TS:
                 t_ts = t_now
                 for contract in self.futures.keys():
-                    self.ohlcv[contract] = requests.get('https://test.deribit.com/api/v2/public/get_tradingview_chart_data?instrument_name=' + contract + '&start_timestamp=' + str(int(time.time()) * 1000 - 1000 * 60 * 60) + '&end_timestamp=' + str(int(time.time())* 1000) + '&resolution=1')
+                    self.ohlcv[contract] = requests.get('https://www.deribit.com/api/v2/public/get_tradingview_chart_data?instrument_name=' + contract + '&start_timestamp=' + str(int(time.time()) * 1000 - 1000 * 60 * 60) + '&end_timestamp=' + str(int(time.time())* 1000) + '&resolution=1')
             
                 self.update_timeseries()
                 self.update_vols()
@@ -678,7 +680,7 @@ class MarketMaker( object ):
         # Get all futures contracts
         self.get_futures()
         for k in self.futures.keys():
-            self.ohlcv[k] = requests.get('https://test.deribit.com/api/v2/public/get_tradingview_chart_data?instrument_name=' + k + '&start_timestamp=' + str(int(time.time()) * 1000 - 1000 * 60 * 60) + '&end_timestamp=' + str(int(time.time())* 1000) + '&resolution=1')
+            self.ohlcv[k] = requests.get('https://www.deribit.com/api/v2/public/get_tradingview_chart_data?instrument_name=' + k + '&start_timestamp=' + str(int(time.time()) * 1000 - 1000 * 60 * 60) + '&end_timestamp=' + str(int(time.time())* 1000) + '&resolution=1')
             
             self.bbw[k] = 0
             self.bands[k] = []
