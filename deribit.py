@@ -4,8 +4,11 @@ from collections    import OrderedDict
 from datetime       import datetime
 from os.path        import getmtime
 from time           import sleep
+from datetime import date, timedelta
 from utils          import ( get_logger, lag, print_dict, print_dict_of_dicts, sort_by_key,
                              ticksize_ceil, ticksize_floor, ticksize_round )
+import quantstats as qs
+
 import ccxt
 import requests
 import pandas as pd
@@ -18,8 +21,8 @@ import argparse, logging, math, os, pathlib, sys, time, traceback
 try:
     from deribit_api    import RestClient
 except ImportError:
-    print("Please install the deribit_api pacakge", file=sys.stderr)
-    print("    pip3 install deribit_api", file=sys.stderr)
+    #print("Please install the deribit_api pacakge", file=sys.stderr)
+    #print("    pip3 install deribit_api", file=sys.stderr)
     exit(1)
 
 # Add command line switches
@@ -44,12 +47,25 @@ parser.add_argument( '-m',
 parser.add_argument( '--no-restart',
                      dest   = 'restart',
                      action = 'store_false' )
+qs.extend_pandas()
+
+# fetch the daily returns for a stock
+
+from datetime import datetime 
+#data = {}
+#stock = qs.utils.download_returns('FB')
+#data = {0: 0, 1: -1, 2: 1, 3: -1, 4: 2, 5:-3, 6: 10}
+#{(datetime.strptime('2020-02-28', '%Y-%m-%d')): 0,(datetime.strptime(datetime.today().strftime('%Y-%m-%d'), '%Y-%m-%d')): -1}
+#s = pd.Series(data)
+
+##print(s)
+##print(qs.stats.max_drawdown(s))
 
 args    = parser.parse_args()
 URL     = 'https://test.deribit.com'#ctrl+h!!!!!
 
-KEY     = 'q5VK3snD'
-SECRET  = 'ghU1bnT3X89_KhgTj8b55w7Q-V02cVgAS_uUJHcE89U'
+KEY     = 'J1seZCRTZTnu'
+SECRET  = 'QHH2P6LYQDWUBR7FBIOV3VXILUJ56C3H'
 BP                  = 1e-4      # one basis point
 BTC_SYMBOL          = 'btc'
 CONTRACT_SIZE       = 10        # USD
@@ -106,12 +122,22 @@ class MarketMaker( object ):
         self.bbw = {}
         self.atr = {}
         self.diffdeltab = {}
+        self.diff2 = 0
+        self.diff3 = 0
         self.bands = {}
         self.quantity_switch = []
         self.price = []
         self.buysellsignal = {}
         self.directional = []
+        self.seriesData = {}
+        self.seriesData[(datetime.strptime((date.today() - timedelta(days=1)).strftime('%Y-%m-%d'), '%Y-%m-%d'))] = 0
+            
+        self.seriesPercent = {}
+        self.startUsd = {}
+        self.firstfirst = True
         self.dsrsi = 50
+        self.minMaxDD = None
+        self.maxMaxDD = None
         self.ws = {}
         self.ohlcv = {}
         self.mean_looptime      = 1
@@ -133,7 +159,7 @@ class MarketMaker( object ):
     def get_bbo( self, contract ): # Get best b/o excluding own orders
         j = self.ohlcv[contract].json()
         fut2 = contract
-        print(contract)
+        #print(contract)
         best_bids = []
         best_asks = []
         o = []
@@ -167,12 +193,12 @@ class MarketMaker( object ):
                 self.dsrsi = TA.STOCHRSI(ddf).iloc[-1] * 100
             except: 
                 self.dsrsi = 50           
-            #print(self.dsrsi)
+            ##print(self.dsrsi)
         # Get orderbook
         if 2 in self.volatility or 3 in self.price or 4 in self.quantity_switch:
             self.bands[fut2] = TA.BBANDS(ddf).iloc[-1]
             self.bbw[fut2] = (TA.BBWIDTH(ddf).iloc[-1])
-            print(float(self.bands[fut2]['BB_UPPER'] - self.bands[fut2]['BB_LOWER']))
+            #print(float(self.bands[fut2]['BB_UPPER'] - self.bands[fut2]['BB_LOWER']))
             if (float(self.bands[fut2]['BB_UPPER'] - self.bands[fut2]['BB_LOWER'])) > 0:
                 deltab = (self.get_spot() - self.bands[fut2]['BB_LOWER']) / (self.bands[fut2]['BB_UPPER'] - self.bands[fut2]['BB_LOWER'])
                 if deltab > 50:
@@ -219,7 +245,7 @@ class MarketMaker( object ):
             best_bids.append(best_bid)
         if 1 in self.price:
             dvwap = TA.VWAP(ddf)
-            #print(dvwap)
+            ##print(dvwap)
             tsz = self.get_ticksize( contract ) 
             try:   
                 bid = ticksize_floor( dvwap.iloc[-1], tsz )
@@ -228,7 +254,7 @@ class MarketMaker( object ):
                 bid = ticksize_floor( self.get_spot(), tsz )
                 ask = ticksize_ceil( self.get_spot(), tsz )
            
-            print( { 'bid': bid, 'ask': ask })
+            #print( { 'bid': bid, 'ask': ask })
             best_asks.append(best_ask)
             best_bids.append(best_bid)
         if 2 in self.quantity_switch:
@@ -253,7 +279,7 @@ class MarketMaker( object ):
                 self.buysellsignal[fut2] = 1
 
         
-            #print({ 'bid': best_bid, 'ask': best_ask })
+            ##print({ 'bid': best_bid, 'ask': best_ask })
         return { 'bid': self.cal_average(best_bids), 'ask': self.cal_average(best_asks) }
 
 
@@ -288,7 +314,41 @@ class MarketMaker( object ):
     
     
     def output_status( self ):
-        
+        startLen = (len(self.seriesData))
+        if self.startUsd != {}:
+            startUsd = self.startUsd
+            nowUsd = self.equity_usd
+            diff = 100 * ((nowUsd / startUsd) -1)
+            print('diff')
+            print(diff)
+            
+            if diff < self.diff2:
+                self.diff2 = diff
+            if diff > self.diff3:
+                self.diff3 = diff
+            if self.diff3 > self.maxMaxDD:
+                print('broke max max dd! sleep 24hr')
+                time.sleep(60 * 60 * 24)
+                self.diff3 = 0
+                self.startUsd = self.equity_usd
+            if self.diff2 < self.minMaxDD:
+                print('broke min max dd! sleep 24hr')
+                time.sleep(60 * 60 * 24)
+                self.diff2 = 0
+                self.startUsd = self.equity_usd
+            self.seriesData[(datetime.strptime(datetime.today().strftime('%Y-%m-%d'), '%Y-%m-%d'))] = self.diff2
+            
+            endLen = (len(self.seriesData))
+            if endLen != startLen:
+                self.seriesPercent[(datetime.strptime(datetime.today().strftime('%Y-%m-%d'), '%Y-%m-%d'))] = diff
+                self.diff2 = 0
+                self.diff3 = 0
+                self.startUsd = self.equity_usd
+            s = pd.Series(self.seriesData)
+
+
+            print(s)
+            print(qs.stats.max_drawdown(s))
         if not self.output:
             return None
         
@@ -306,13 +366,15 @@ class MarketMaker( object ):
         
         pnl_usd = self.equity_usd - self.equity_usd_init
         pnl_btc = self.equity_btc - self.equity_btc_init
-        
+        if self.firstfirst == True:
+            self.startUsd = self.equity_usd
+            self.firstfirst = False
         print( 'Equity ($):        %7.2f'   % self.equity_usd)
         print( 'P&L ($)            %7.2f'   % pnl_usd)
         print( 'Equity (BTC):      %7.4f'   % self.equity_btc)
         print( 'P&L (BTC)          %7.4f'   % pnl_btc)
-        #print( '%% Delta:           %s%%'% round( self.get_pct_delta() / PCT, 1 ))
-        #print( 'Total Delta (BTC): %s'   % round( sum( self.deltas.values()), 2 ))        
+        ##print( '%% Delta:           %s%%'% round( self.get_pct_delta() / PCT, 1 ))
+        ##print( 'Total Delta (BTC): %s'   % round( sum( self.deltas.values()), 2 ))        
         #print_dict_of_dicts( {
         #    k: {
         #        'BTC': self.deltas[ k ]
@@ -334,8 +396,8 @@ class MarketMaker( object ):
                 } for k in self.vols.keys()
                 }, 
                 multiple = 100, title = 'Vols' )
-            print( '\nMean Loop Time: %s' % round( self.mean_looptime, 2 ))
-            print( '' )
+            #print( '\nMean Loop Time: %s' % round( self.mean_looptime, 2 ))
+            #print( '' )
             for k in self.positions.keys():
 
                 self.multsShort[k] = 1
@@ -350,8 +412,8 @@ class MarketMaker( object ):
                 if self.positions[k][key] < -1 * 10:
                     self.multsLong[k] = (-1 * self.positions[k]['currentQty'] / 10) * POS_MOD
 #Vols           
-                print(self.multsLong)
-                print(self.multsShort)
+                #print(self.multsLong)
+                #print(self.multsShort)
         
     def place_orders( self ):
 
@@ -369,7 +431,7 @@ class MarketMaker( object ):
             pos_lim_long    = bal_btc * PCT_LIM_LONG / len(self.futures)
             pos_lim_short   = bal_btc * PCT_LIM_SHORT / len(self.futures)
             expi            = self.futures[ fut ][ 'expi_dt' ]
-            #print(self.futures[ fut ][ 'expi_dt' ])
+            ##print(self.futures[ fut ][ 'expi_dt' ])
             if self.eth is 0:
                 self.eth = 200
             if 'ETH' in fut:
@@ -404,7 +466,7 @@ class MarketMaker( object ):
             if self.dsrsi < 20: #under
                 place_asks = 0
             if not place_bids and not place_asks:
-                print( 'No bid no offer for %s' % fut, min_order_size_btc )
+                #print( 'No bid no offer for %s' % fut, min_order_size_btc )
                 continue
                 
             tsz = self.get_ticksize( fut )            
@@ -454,10 +516,10 @@ class MarketMaker( object ):
                 asks[ 0 ]   = ticksize_ceil( asks[ 0 ], tsz  )
             for i in range( max( nbids, nasks )):
                 # BIDS
-                print('nbids')
-                print(nbids)
-                print('nasks')
-                print(nasks)
+                #print('nbids')
+                #print(nbids)
+                #print('nasks')
+                #print(nasks)
                 if place_bids and i < nbids:
 
                     if i > 0:
@@ -519,10 +581,10 @@ class MarketMaker( object ):
                     if 'ETH' in fut:
                         qty = round( prc * 450 * qtybtc / (con_sz / 1) ) 
                       
-                    print(qty)
-                    print(qty)
-                    print(qty)
-                    print(qty)
+                    #print(qty)
+                    #print(qty)
+                    #print(qty)
+                    #print(qty)
                     if 4 in self.quantity_switch:
                         if self.diffdeltab[fut] > 0 or self.diffdeltab[fut] < 0:
                             qty = round(qty / (self.diffdeltab[fut])) 
@@ -531,10 +593,10 @@ class MarketMaker( object ):
                         qty = round ( qty / self.buysellsignal[fut])    
                     if 3 in self.quantity_switch:
                         qty = round (qty * self.multsShort[fut]) 
-                        print(qty)
-                        print(qty)
-                        print(qty)
-                        print(qty)
+                        #print(qty)
+                        #print(qty)
+                        #print(qty)
+                        #print(qty)
                     if 1 in self.quantity_switch:
                         qty = round (qty / self.diff)
 
@@ -581,12 +643,12 @@ class MarketMaker( object ):
     def restart( self ):        
         try:
             strMsg = 'RESTARTING'
-            print( strMsg )
+            #print( strMsg )
             self.client.cancelall()
             strMsg += ' '
             for i in range( 0, 5 ):
                 strMsg += '.'
-                print( strMsg )
+                #print( strMsg )
                 sleep( 1 )
         except:
             pass
@@ -612,11 +674,15 @@ class MarketMaker( object ):
             # 1: vwap
             # 2: ppo
             #
+
             # Volatility
             # 0: none
             # 1: ewma
             with open('deribit-settings.json', 'r') as read_file:
                 data = json.load(read_file)
+
+                self.maxMaxDD = data['maxMaxDD']
+                self.minMaxDD = data['minMaxDD']
                 self.directional = data['directional']
                 self.price = data['price']
                 self.volatility = data['volatility']
@@ -829,9 +895,9 @@ class MarketMaker( object ):
         for s in self.vols.keys():
             
             x   = p[ s ]            
-            print(x)
+            #print(x)
             dx  = x[ 0 ] / x[ 1 ] - 1
-            print(dx)
+            #print(dx)
             dt  = ( t[ 0 ] - t[ 1 ] ).total_seconds()
             v   = min( dx ** 2 / dt, cov_cap ) * NSECS
             v   = w * v + ( 1 - w ) * self.vols[ s ] ** 2
@@ -844,11 +910,11 @@ if __name__ == '__main__':
         mmbot = MarketMaker( monitor = args.monitor, output = args.output )
         mmbot.run()
     except( KeyboardInterrupt, SystemExit ):
-        print( "Cancelling open orders" )
+        #print( "Cancelling open orders" )
         mmbot.client.cancelall()
         sys.exit()
     except:
-        print( traceback.format_exc())
+        #print( traceback.format_exc())
         if args.restart:
             mmbot.restart()
         

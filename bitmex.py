@@ -4,8 +4,10 @@ from collections    import OrderedDict
 from datetime       import datetime
 from os.path        import getmtime
 from time           import sleep
+from datetime import date, timedelta
 from utils          import ( get_logger, lag, print_dict, print_dict_of_dicts, sort_by_key,
                              ticksize_ceil, ticksize_floor, ticksize_round )
+import quantstats as qs
 import ccxt
 from datetime import timedelta
 
@@ -102,6 +104,17 @@ class MarketMaker( object ):
         self.equity_btc_init    = None
         self.con_size           = float( CONTRACT_SIZE )
         self.client             = None
+
+        self.minMaxDD = None
+        self.maxMaxDD = None
+        self.seriesData = {}
+        self.seriesData[(datetime.strptime((date.today() - timedelta(days=1)).strftime('%Y-%m-%d'), '%Y-%m-%d'))] = 0
+            
+        self.seriesPercent = {}
+        self.startUsd = {}
+        self.firstfirst = True
+        self.diff2 = 0
+        self.diff3 = 0
         self.deltas             = OrderedDict()
         self.futures            = OrderedDict()
         self.futures_prv        = OrderedDict()
@@ -273,7 +286,7 @@ class MarketMaker( object ):
         insts               = self.client.fetchMarkets()
         #print(insts[0])
         self.futures        = sort_by_key( { 
-            i[ 'symbol' ]: i for i in insts if 'BTC/USD' in i['symbol'] or ('ETH/USD' in i['symbol'] and '7D' not in i['symbol'] and '.' not in i['symbol']) or ('XBT' in i['symbol'] and '7D' not in i['symbol']) and '.' not in i['symbol']
+            i[ 'symbol' ]: i for i in insts if 'BTC/USD' in i['symbol'] or ('ETH/USD' in i['symbol'] and '7D' not in i['symbol'] and '.' not in i['symbol']) #or ('XBT' in i['symbol'] and '7D' not in i['symbol']) and '.' not in i['symbol']
         } )
         self.futures['XBTUSD'] = self.futures['BTC/USD']
         del self.futures['BTC/USD']
@@ -314,7 +327,41 @@ class MarketMaker( object ):
         return self.futures[ contract ]['info'][ 'tickSize' ]
     
     def output_status( self ):
-        
+        startLen = (len(self.seriesData))
+        if self.startUsd != {}:
+            startUsd = self.startUsd
+            nowUsd = self.equity_usd
+            diff = 100 * ((nowUsd / startUsd) -1)
+            print('diff')
+            print(diff)
+            
+            if diff < self.diff2:
+                self.diff2 = diff
+            if diff > self.diff3:
+                self.diff3 = diff
+            if self.diff3 > self.maxMaxDD:
+                print('broke max max dd! sleep 24hr')
+                time.sleep(60 * 60 * 24)
+                self.diff3 = 0
+                self.startUsd = self.equity_usd
+            if self.diff2 < self.minMaxDD:
+                print('broke min max dd! sleep 24hr')
+                time.sleep(60 * 60 * 24)
+                self.diff2 = 0
+                self.startUsd = self.equity_usd
+            self.seriesData[(datetime.strptime(datetime.today().strftime('%Y-%m-%d'), '%Y-%m-%d'))] = self.diff2
+            
+            endLen = (len(self.seriesData))
+            if endLen != startLen:
+                self.seriesPercent[(datetime.strptime(datetime.today().strftime('%Y-%m-%d'), '%Y-%m-%d'))] = diff
+                self.diff2 = 0
+                self.diff3 = 0
+                self.startUsd = self.equity_usd
+            s = pd.Series(self.seriesData)
+
+
+            print(s)
+            print(qs.stats.max_drawdown(s))
         if not self.output:
             return None
         
@@ -332,7 +379,9 @@ class MarketMaker( object ):
         
         pnl_usd = self.equity_usd - self.equity_usd_init
         pnl_btc = self.equity_btc - self.equity_btc_init
-        
+        if self.firstfirst == True:
+            self.startUsd = self.equity_usd
+            self.firstfirst = False
         print( 'Equity ($):        %7.2f'   % self.equity_usd)
         print( 'P&L ($)            %7.2f'   % pnl_usd)
         print( 'Equity (BTC):      %7.4f'   % self.equity_btc)
@@ -684,6 +733,8 @@ class MarketMaker( object ):
             # 4: BBands %B
             with open('bitmex-settings.json', 'r') as read_file:
                 data = json.load(read_file)
+                self.maxMaxDD = data['maxMaxDD']
+                self.minMaxDD = data['minMaxDD']
                 self.directional = data['directional']
                 self.price = data['price']
                 self.volatility = data['volatility']
@@ -776,7 +827,7 @@ class MarketMaker( object ):
             self.buysellsignal[k] = 1
             #sleep(120)
             print(k)
-            sleep(11)
+            sleep(5)
             if k == 'BTC/USD':
                 k = 'XBTUSD'
             if k == 'ETH/USD':
