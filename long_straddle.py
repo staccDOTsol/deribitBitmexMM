@@ -5,7 +5,7 @@ from datetime import datetime
 #   >>> black_scholes(7598.45, 7000, 0.09587902546296297, 0.679, 0.03, 0.0, -1)
 #   >>> black_scholes(7598.45, 9000, 0.09587902546296297, 0.675, 0.03, 0.0, 1)
 from deribit_api    import RestClient
-KEY     = 'zq_2PeNx' #
+KEY     = '' #
 SECRET  = '0Rtx6PQHWuqQbn9bYuS9-6N0vYcz6_5asLNtm4jBvZY'
 client = RestClient( KEY, SECRET, 'https://test.deribit.com' )
 import math

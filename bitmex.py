@@ -54,7 +54,7 @@ parser.add_argument( '--no-restart',
 args    = parser.parse_args()
 URL     = 'https://www.deribit.com'
 #ctrl+h testnet.bitmex!!!!
-KEY = "Tw8q0mgHYynFUbs_daN29GHr"
+KEY = ""
 SECRET = "plHscjHqgx2iI3BrK4LcsU7SDpgK9qt_RPOnxd4tTPxQR5cL"
 
 BP                  = 1e-4      # one basis point

@@ -64,7 +64,7 @@ from datetime import datetime
 args    = parser.parse_args()
 URL     = 'https://test.deribit.com'#ctrl+h!!!!!
 
-KEY     = 'J1seZCRTZTnu'
+KEY     = ''
 SECRET  = 'QHH2P6LYQDWUBR7FBIOV3VXILUJ56C3H'
 BP                  = 1e-4      # one basis point
 BTC_SYMBOL          = 'btc'

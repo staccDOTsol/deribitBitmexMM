@@ -62,7 +62,7 @@ parser.add_argument( '--no-restart',
 args    = parser.parse_args()
 URL     = 'https://test.deribit.com'
 
-KEY     = 'pUcNWyjC'
+KEY     = ''
 SECRET  = 'iQaAEpwYEOnS-aJm7vlusoDDwYry00thwywe1mwDfZU'
 
 clients['deribit'] = ccxt.deribit({"apiKey": KEY, "secret": SECRET})
